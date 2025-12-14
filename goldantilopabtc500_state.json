@@ -1,0 +1,242 @@
+{
+  "balance": 1979.9427138467156,
+  "available": 1781.948442462044,
+  "in_position": true,
+  "position": {
+    "side": "long",
+    "entry_price": 109652.81,
+    "size_base": 0.9028235180870949,
+    "notional": 98997.13569233578,
+    "margin": 197.99427138467155,
+    "entry_time": "2025-10-31T07:19:07.717782",
+    "close_time_seconds": 714,
+    "trade_number": 114
+  },
+  "last_trade_time": "2025-10-31T07:19:07.717782",
+  "last_1m_dir": "long",
+  "one_min_flip_count": 0,
+  "skip_next_signal": false,
+  "trades": [
+    {
+      "time": "2025-10-31T07:18:01.086300",
+      "side": "long",
+      "entry_price": 109690.07,
+      "exit_price": 109691.92,
+      "size_base": 0.9154769898244751,
+      "pnl": -28.4319880980035,
+      "notional": 100418.73509723597,
+      "duration": "2\u043c 58\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T07:10:51.187729",
+      "side": "short",
+      "entry_price": 109647.47,
+      "exit_price": 109519.99,
+      "size_base": 0.8779645174165049,
+      "pnl": 83.04294025490526,
+      "notional": 96266.58808449071,
+      "duration": "7\u043c 11\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T06:58:07.789533",
+      "side": "short",
+      "entry_price": 109573.31,
+      "exit_price": 109610.34,
+      "size_base": 0.907505771136821,
+      "pnl": -63.436462061464596,
+      "notional": 99438.41118756394,
+      "duration": "4\u043c 10\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T06:41:56.351092",
+      "side": "short",
+      "entry_price": 109665.43,
+      "exit_price": 109608.07,
+      "size_base": 0.8967427400044058,
+      "pnl": 21.934660112051784,
+      "notional": 98341.67818196135,
+      "duration": "10\u043c 11\u0441",
+      "close_reason": "random_time"
+    },
+    {
+      "time": "2025-10-31T06:21:07.879795",
+      "side": "short",
+      "entry_price": 109674.89,
+      "exit_price": 109647.28,
+      "size_base": 0.8988340965894294,
+      "pnl": -4.7570497946738435,
+      "notional": 98579.53067169504,
+      "duration": "3\u043c 5\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T06:13:31.957238",
+      "side": "short",
+      "entry_price": 109870.42,
+      "exit_price": 109655.64,
+      "size_base": 0.8286684651690411,
+      "pnl": 150.66756725634232,
+      "notional": 91046.15230887792,
+      "duration": "8\u043c 35\u0441",
+      "close_reason": "random_time"
+    },
+    {
+      "time": "2025-10-31T06:00:32.329233",
+      "side": "short",
+      "entry_price": 109891.74,
+      "exit_price": 109911.65,
+      "size_base": 0.8489320812372604,
+      "pnl": -44.889424802119635,
+      "notional": 93290.6235489839,
+      "duration": "1\u043c 11\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T05:56:45.402673",
+      "side": "short",
+      "entry_price": 109914.95,
+      "exit_price": 109886.99,
+      "size_base": 0.8506933132565727,
+      "pnl": -4.265788858932314,
+      "notional": 93503.91299193053,
+      "duration": "6\u043c 9\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T05:50:22.955612",
+      "side": "long",
+      "entry_price": 109918.47,
+      "exit_price": 109950.14,
+      "size_base": 0.8511715543351496,
+      "pnl": -1.1112393622197487,
+      "notional": 93559.47496004151,
+      "duration": "9\u043c 14\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T05:35:38.349801",
+      "side": "long",
+      "entry_price": 109747.0,
+      "exit_price": 110015.09,
+      "size_base": 0.770003274014039,
+      "pnl": 181.0785129364554,
+      "notional": 84505.54931321874,
+      "duration": "11\u043c 32\u0441",
+      "close_reason": "random_time"
+    },
+    {
+      "time": "2025-10-31T05:12:49.757422",
+      "side": "long",
+      "entry_price": 109900.87,
+      "exit_price": 109903.54,
+      "size_base": 0.779673212827043,
+      "pnl": -23.624301843369313,
+      "notional": 85686.76440538719,
+      "duration": "5\u043c 47\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T05:00:09.632123",
+      "side": "long",
+      "entry_price": 110026.13,
+      "exit_price": 110081.55,
+      "size_base": 0.7709336855827525,
+      "pnl": 17.27828988160269,
+      "notional": 84822.84991130706,
+      "duration": "4\u043c 33\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T04:46:27.172510",
+      "side": "long",
+      "entry_price": 109727.42,
+      "exit_price": 110085.33,
+      "size_base": 0.6733200826612971,
+      "pnl": 218.82348813392392,
+      "notional": 73881.67550461086,
+      "duration": "9\u043c 48\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T04:29:04.380507",
+      "side": "long",
+      "entry_price": 109247.15,
+      "exit_price": 109795.86,
+      "size_base": 0.5470935904277031,
+      "pnl": 282.2651993423403,
+      "notional": 59768.41553749384,
+      "duration": "8\u043c 54\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T04:14:19.522865",
+      "side": "long",
+      "entry_price": 109241.65,
+      "exit_price": 109375.41,
+      "size_base": 0.5229493340072527,
+      "pnl": 52.81134848280898,
+      "notional": 57127.8481133534,
+      "duration": "9\u043c 13\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T04:02:18.461336",
+      "side": "long",
+      "entry_price": 109232.18,
+      "exit_price": 109152.93,
+      "size_base": 0.5512611028508633,
+      "pnl": -61.75207800501211,
+      "notional": 60215.45201360401,
+      "duration": "3\u043c 53\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T03:54:05.608580",
+      "side": "long",
+      "entry_price": 109095.69,
+      "exit_price": 109228.97,
+      "size_base": 0.5276352501361476,
+      "pnl": 53.05440663356746,
+      "notional": 57562.73168192562,
+      "duration": "7\u043c 25\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-31T03:43:51.765344",
+      "side": "long",
+      "entry_price": 107667.31,
+      "exit_price": 108866.39,
+      "size_base": 0.34675028333601193,
+      "pnl": 404.5812286679879,
+      "notional": 37333.67024852623,
+      "duration": "264\u043c 25\u0441",
+      "close_reason": "random_time"
+    },
+    {
+      "time": "2025-10-30T23:17:06.991508",
+      "side": "long",
+      "entry_price": 107650.7,
+      "exit_price": 107611.45,
+      "size_base": 0.3587242857340775,
+      "pnl": -25.66500435494458,
+      "notional": 38616.920466273456,
+      "duration": "1\u043c 54\u0441",
+      "close_reason": "sar_reversal"
+    },
+    {
+      "time": "2025-10-30T23:07:34.728492",
+      "side": "long",
+      "entry_price": 107835.6,
+      "exit_price": 107755.74,
+      "size_base": 0.37776371273043213,
+      "pnl": -42.38912308480666,
+      "notional": 40736.37662051379,
+      "duration": "1\u043c 14\u0441",
+      "close_reason": "sar_reversal"
+    }
+  ],
+  "telegram_trade_counter": 114
+}
