@@ -1,1 +1,381 @@
+/* Dark theme for trading dashboard */
+body {
+    background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+    color: #ffffff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
 
+/* Cards styling */
+.card {
+    background: rgba(26, 31, 46, 0.9);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.card-header {
+    background: rgba(59, 130, 246, 0.1);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px 12px 0 0 !important;
+}
+
+/* Button styling */
+.btn {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.btn-success {
+    background: linear-gradient(45deg, #10b981, #059669);
+}
+
+.btn-danger {
+    background: linear-gradient(45deg, #ef4444, #dc2626);
+}
+
+.btn-warning {
+    background: linear-gradient(45deg, #f59e0b, #d97706);
+}
+
+/* Status badges */
+.badge {
+    font-size: 0.85em;
+    font-weight: 600;
+    padding: 0.5em 0.8em;
+    border-radius: 6px;
+}
+
+.bg-success {
+    background: linear-gradient(45deg, #10b981, #059669) !important;
+}
+
+.bg-danger {
+    background: linear-gradient(45deg, #ef4444, #dc2626) !important;
+}
+
+.bg-warning {
+    background: linear-gradient(45deg, #f59e0b, #d97706) !important;
+}
+
+.bg-info {
+    background: linear-gradient(45deg, #3b82f6, #2563eb) !important;
+}
+
+/* SAR Indicators */
+.sar-indicator {
+    padding: 15px;
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 10px;
+    border-left: 4px solid rgba(59, 130, 246, 0.5);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.sar-indicator:hover {
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateX(5px);
+}
+
+/* SAR Badge Styling */
+.sar-badge {
+    font-size: 0.9em;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sar-badge.bg-success {
+    background: linear-gradient(45deg, #10b981, #059669) !important;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    animation: pulse-success 2s infinite;
+}
+
+.sar-badge.bg-danger {
+    background: linear-gradient(45deg, #ef4444, #dc2626) !important;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    animation: pulse-danger 2s infinite;
+}
+
+/* Signal Badge */
+.signal-badge {
+    font-size: 1.1em;
+    font-weight: 800;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.signal-badge.glow-success {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6), 0 4px 15px rgba(0, 0, 0, 0.4);
+    animation: glow-success 1.5s ease-in-out infinite alternate;
+}
+
+.signal-badge.glow-danger {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 4px 15px rgba(0, 0, 0, 0.4);
+    animation: glow-danger 1.5s ease-in-out infinite alternate;
+}
+
+/* Position display */
+#current-position {
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Trade history */
+.trade-item {
+    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 12px 16px;
+    transition: background 0.3s ease;
+}
+
+.trade-item:hover {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.trade-item:last-child {
+    border-bottom: none;
+}
+
+.trade-profit {
+    color: #10b981;
+    font-weight: bold;
+}
+
+.trade-loss {
+    color: #ef4444;
+    font-weight: bold;
+}
+
+/* Chart container */
+#priceChart {
+    background: rgba(26, 31, 46, 0.5);
+    border-radius: 8px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(26, 31, 46, 0.5);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.6);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.8);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes pulse-success {
+    0% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+@keyframes pulse-danger {
+    0% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+    70% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+@keyframes glow-success {
+    from {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+    to {
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.8), 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+}
+
+@keyframes glow-danger {
+    from {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.4), 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+    to {
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.8), 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* Enhanced border animations for active signals */
+.sar-indicator.signal-long {
+    border-left-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.sar-indicator.signal-short {
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Text colors */
+.text-profit {
+    color: #10b981 !important;
+}
+
+.text-loss {
+    color: #ef4444 !important;
+}
+
+.text-neutral {
+    color: #6b7280 !important;
+}
+
+/* Override any dark text to white */
+h1, h2, h3, h4, h5, h6, p, td, th, strong {
+    color: #ffffff !important;
+}
+
+/* Keep colored text elements as they are */
+.text-success {
+    color: #10b981 !important;
+}
+
+.text-danger {
+    color: #ef4444 !important;
+}
+
+.text-primary {
+    color: #3b82f6 !important;
+}
+
+.text-info {
+    color: #06b6d4 !important;
+}
+
+.text-warning {
+    color: #f59e0b !important;
+}
+
+.text-muted {
+    color: #ffffff !important;
+    opacity: 0.8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 10px;
+    }
+    
+    .card-body {
+        padding: 15px;
+    }
+    
+    h2 {
+        font-size: 1.5rem;
+    }
+    
+    h3 {
+        font-size: 1.25rem;
+    }
+    
+    .btn {
+        font-size: 0.9rem;
+        padding: 8px 12px;
+    }
+}
+
+/* Status indicators */
+.status-online {
+    color: #10b981;
+}
+
+.status-offline {
+    color: #ef4444;
+}
+
+.status-warning {
+    color: #f59e0b;
+}
+
+/* Border colors for different states */
+.border-profit {
+    border-color: #10b981 !important;
+}
+
+.border-loss {
+    border-color: #ef4444 !important;
+}
+
+.border-neutral {
+    border-color: #6b7280 !important;
+}
+
+/* Special effects for important elements */
+.glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.glow-success {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.glow-danger {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
