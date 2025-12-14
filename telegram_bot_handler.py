@@ -30,16 +30,21 @@ class TelegramBotHandler:
             return False
         
         try:
-            # Получаем домен Replit
-            replit_domain = os.getenv('REPL_SLUG', 'goldantelopebtcx500')
-            replit_user = os.getenv('REPL_OWNER', 'your-username')
-            webapp_url = f"https://{replit_domain}.{replit_user}.repl.co/webapp"
+            # --- ИЗМЕНЕННЫЙ УЧАСТОК КОДА ---
+            # Явное указание нового домена Railway
+            BASE_DOMAIN = "https://arbitragebotv20-pocketoptionbotv10.up.railway.app"
+            webapp_url = f"{BASE_DOMAIN}/webapp"
             
-            # Попробуем получить домен из переменной окружения
-            env_domain = os.popen('env | grep DOMAIN').read()
-            if 'REPLIT_DEV_DOMAIN' in env_domain:
-                domain = env_domain.split('REPLIT_DEV_DOMAIN=')[1].split('\n')[0]
-                webapp_url = f"https://{domain}/webapp"
+            # Удаляем старую логику определения домена Replit
+            # replit_domain = os.getenv('REPL_SLUG', 'goldantelopebtcx500')
+            # replit_user = os.getenv('REPL_OWNER', 'your-username')
+            # webapp_url = f"https://{replit_domain}.{replit_user}.repl.co/webapp"
+            
+            # env_domain = os.popen('env | grep DOMAIN').read()
+            # if 'REPLIT_DEV_DOMAIN' in env_domain:
+            #     domain = env_domain.split('REPLIT_DEV_DOMAIN=')[1].split('\n')[0]
+            #     webapp_url = f"https://{domain}/webapp"
+            # -------------------------------
             
             logging.info(f"WebApp URL: {webapp_url}")
             
@@ -83,7 +88,7 @@ class TelegramBotHandler:
             
             if menu_response.status_code == 200:
                 logging.info("✅ WebApp menu button configured successfully")
-                logging.info(f"   WebApp URL: {webapp_url}")
+                logging.info(f"    WebApp URL: {webapp_url}")
                 return True
             else:
                 logging.error(f"Failed to set menu button: {menu_response.text}")
@@ -99,8 +104,9 @@ class TelegramBotHandler:
             return
         
         try:
+            # Заменяем старое название проекта на общее
             message = (
-                "🚀 <b>goldantelopebtcx500 Trading Bot</b>\n\n"
+                "🚀 <b>Trading Bot Dashboard</b>\n\n"
                 "Welcome! Your Telegram mini app is ready.\n\n"
                 "📱 <b>How to use:</b>\n"
                 "• Click the menu button (☰) at the bottom\n"
@@ -143,7 +149,7 @@ def setup_telegram_webapp():
         else:
             logging.error("❌ Failed to setup Telegram WebApp")
     else:
-        logging.warning("⚠️  Telegram bot token not configured. Skipping WebApp setup.")
+        logging.warning("⚠️ Telegram bot token not configured. Skipping WebApp setup.")
 
 if __name__ == "__main__":
     setup_telegram_webapp()
