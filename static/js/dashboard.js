@@ -11,55 +11,29 @@ class TradingDashboard {
     }
 
     bindEvents() {
-        // Bot control buttons with password protection
+        // Bot control buttons (NO password check implemented here)
         document.getElementById('start-bot').addEventListener('click', () => {
-            this.withPasswordCheck(() => this.startBot());
+            this.startBot();
         });
 
         document.getElementById('stop-bot').addEventListener('click', () => {
-            this.withPasswordCheck(() => this.stopBot());
+            this.stopBot();
         });
 
         document.getElementById('close-position').addEventListener('click', () => {
-            this.withPasswordCheck(() => this.closePosition());
+            this.closePosition();
         });
 
         document.getElementById('delete-trade').addEventListener('click', () => {
-            this.withPasswordCheck(() => this.deleteLastTrade());
+            this.deleteLastTrade();
         });
 
         document.getElementById('reset-balance').addEventListener('click', () => {
-            this.withPasswordCheck(() => this.resetBalance());
+            this.resetBalance();
         });
     }
 
-    withPasswordCheck(callback) {
-        const password = prompt('Enter dashboard password:');
-        if (password === null) {
-            return; // User cancelled
-        }
-        
-        // Verify password with server
-        fetch('/api/verify_password', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ password: password })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                callback();
-            } else {
-                this.showNotification('error', 'Incorrect password');
-            }
-        })
-        .catch(error => {
-            this.showNotification('error', 'Password verification failed');
-            console.error('Password verification error:', error);
-        });
-    }
+    // *** ФУНКЦИЯ withPasswordCheck БЫЛА УДАЛЕНА ***
 
     async startBot() {
         try {
@@ -359,7 +333,7 @@ class TradingDashboard {
             }
             
             pnlElement.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} USDT`;
-            pnlElement.className = colorClass;
+            pnlElement.className = pnl >= 0 ? 'text-success' : 'text-danger'; // Use actual P&L color logic
         }
     }
 
