@@ -468,75 +468,72 @@ class TradingBot:
                     continue
 
                 dir_1m = dirs["1m"]
-                dir_5m = dirs["5m"]
-                dir_15m = dirs["15m"]
-                
-                logging.info(f"[{self.now()}] SAR directions => 1m:{dir_1m} 5m:{dir_5m} 15m:{dir_15m}")
-                
-                # Store current SAR directions for sheets reporting
-                self._current_sar_directions = dirs
+                dir_5m = dirs["5m"]
+                dir_15m = dirs["15m"]
+                
+                logging.info(f"[{self.now()}] SAR directions => 1m:{dir_1m} 5m:{dir_5m} 15m:{dir_15m}")
+                # Store current SAR directions for sheets reporting
+                self._current_sar_directions = dirs
 
-                # Проверка на закрытие (если в позиции)
-                if state["in_position"]:
-                    entry_t = datetime.fromisoformat(state["position"]["entry_time"])
-                    trade_duration = (datetime.utcnow() - entry_t).total_seconds()
-                    
-                    # Принудительное закрытие по случайному времени (8-13 минут)
-                    position_close_time = state["position"].get("close_time_seconds", MAX_RANDOM_TRADE_SECONDS)
-                    if trade_duration >= position_close_time:
-                        minutes = position_close_time / 60
-                        logging.info(f"Closing position due to random time limit ({position_close_time}s = {minutes:.1f}min)")
-                        self.close_position(close_reason="random_time")
-                        state["skip_next_signal"] = True  # устанавливаем флаг пропуска
-                        self.save_state_to_file()
-                        time.sleep(1)
-                        continue
-                    
-                    # Закрытие по смене 1m SAR (мгновенно)
-                    if dir_1m != state["position"]["side"]:
-                        logging.info("Closing because 1m SAR changed")
-                        self.close_position(close_reason="sar_reversal")
-                        state["skip_next_signal"] = True  # устанавливаем флаг пропуска
-                        self.save_state_to_file()
-                        time.sleep(1)
-                        continue
+                # Проверка на закрытие (если в позиции)
+                if state["in_position"]:
+                    entry_t = datetime.fromisoformat(state["position"]["entry_time"])
+                    trade_duration = (datetime.utcnow() - entry_t).total_seconds()
+                    
+                    # Принудительное закрытие по случайному времени (8-13 минут)
+                    position_close_time = state["position"].get("close_time_seconds", MAX_RANDOM_TRADE_SECONDS)
+                    if trade_duration >= position_close_time:
+                        minutes = position_close_time / 60
+                        logging.info(f"Closing position due to random time limit ({position_close_time}s = {minutes:.1f}min)")
+                        self.close_position(close_reason="random_time")
+                        state["skip_next_signal"] = True  # устанавливаем флаг пропуска
+                        self.save_state_to_file()
+                        time.sleep(1)
+                        continue
+                    
+                    # ИЗМЕНЕНО: Закрытие по смене 5m SAR
+                    if dir_5m != state["position"]["side"]:
+                        logging.info("Closing because 5m SAR changed")
+                        self.close_position(close_reason="sar_reversal_5m") # Изменили причину для ясности в логах
+                        state["skip_next_signal"] = True  # устанавливаем флаг пропуска
+                        self.save_state_to_file()
+                        time.sleep(1)
+                        continue
 
-                # Если не в позиции — проверяем условие входа: SAR 15m и 1m совпадают
-                else:
-                    # Отслеживание смены 1m SAR для сброса флага пропуска
-                    if state["last_1m_dir"] and state["last_1m_dir"] != dir_1m:
-                        if state["skip_next_signal"]:
-                            logging.info(f"✅ Resetting skip flag after 1m SAR change: {state['last_1m_dir']} -> {dir_1m}")
-                            state["skip_next_signal"] = False  # сбрасываем флаг и РАЗРЕШАЕМ торговлю
-                            self.save_state_to_file()
-                    
-                    # Сохраняем текущее направление для отслеживания смен
-                    state["last_1m_dir"] = dir_1m
-                    
-                    # Вход когда 15m и 1m SAR совпадают (только если не нужно пропускать)
-                    # SAR-ONLY стратегия: вход при совпадении 15m и 1m SAR
-                    if dir_1m in ["long", "short"] and dir_1m == dir_15m and not state["skip_next_signal"]:
-                        logging.info(f"✅ Entry signal: 15m SAR = 1m SAR = {dir_1m.upper()}")
-                        
-                        # вход в позицию
-                        side = "buy" if dir_1m == "long" else "sell"
-                        price = self.get_current_price()
-                        # compute order size
-                        size_base, notional = self.compute_order_size_usdt(state["balance"], price if price > 0 else 1.0)
-                        logging.info(f"Signal to OPEN {side} — size_base={size_base:.6f} notional=${notional:.2f} price={price}")
-                        
-                        # Place order (маржа уже вычитается в place_market_order)
-                        pos = self.place_market_order(side, amount_base=size_base)
-                        
-                        self.save_state_to_file()
-                        time.sleep(1)
-                    elif state["skip_next_signal"] and dir_1m in ["long", "short"] and dir_1m == dir_15m:
-                        logging.info(f"🔄 Skip flag active: 15m:{dir_15m} = 1m:{dir_1m} (will trade after next 1m change)")
-                    else:
-                        # нет общего сигнала
-                        pass
+                # Если не в позиции — проверяем условие входа:
+                else:
+                    # Отслеживание смены 1m SAR для сброса флага пропуска
+                    if state["last_1m_dir"] and state["last_1m_dir"] != dir_1m:
+                        if state["skip_next_signal"]:
+                            logging.info(f"✅ Resetting skip flag after 1m SAR change: {state['last_1m_dir']} -> {dir_1m}")
+                            state["skip_next_signal"] = False  # сбрасываем флаг и РАЗРЕШАЕМ торговлю
+                            self.save_state_to_file()
+                    
+                    # Сохраняем текущее направление для отслеживания смен
+                    state["last_1m_dir"] = dir_1m
+                    
+                    # ИЗМЕНЕНО: Вход, когда 1m и 5m SAR совпадают
+                    # SAR-ONLY стратегия: вход при совпадении 5m и 1m SAR
+                    if dir_1m in ["long", "short"] and dir_1m == dir_5m and not state["skip_next_signal"]:
+                        logging.info(f"✅ Entry signal: 5m SAR = 1m SAR = {dir_1m.upper()}")
+                        
+                        # вход в позицию
+                        side = "buy" if dir_1m == "long" else "sell"
+                        price = self.get_current_price()
+                        # compute order size
+                        size_base, notional = self.compute_order_size_usdt(state["balance"], price if price > 0 else 1.0)
+                        logging.info(f"Signal to OPEN {side} — size_base={size_base:.6f} notional=${notional:.2f} price={price}")
+                        
+                        # Place order (маржа уже вычитается в place_market_order)
+                        pos = self.place_market_order(side, amount_base=size_base)
+                        
+                        self.save_state_to_file()
+                        time.sleep(1)
+                    # ИЗМЕНЕНО: Пропуск при совпадении 1m и 5m
+                    elif state["skip_next_signal"] and dir_1m in ["long", "short"] and dir_1m == dir_5m:
+                        logging.info(f"🔄 Skip flag active: 5m:{dir_5m} = 1m:{dir_1m} (will trade after next 1m change)")
+                    else:
+                        # нет общего сигнала
+                        pass
 
-                time.sleep(5)  # маленькая пауза в основном цикле
-            except Exception as e:
-                logging.error(f"Main loop error: {e}")
-                time.sleep(5)
+                time.sleep(5)
