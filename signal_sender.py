@@ -41,7 +41,7 @@ class SignalSender:
             "settings": {
                 "targetUrl": self.target_url,
                 "openType": position_capitalized,
-                "openPercent": 50,
+                "openPercent": 33,
                 "closeType": position_capitalized,
                 "closePercent": 100,
                 "mode": mode
