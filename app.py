@@ -1,6 +1,7 @@
 import os
 import logging
 import secrets
+import time # Добавлен для использования в api_stop_bot
 from dotenv import load_dotenv
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import threading
@@ -144,6 +145,7 @@ def api_stop_bot():
     try:
         bot_running = False
         # Добавляем паузу, чтобы поток успел завершиться после остановки
+        # Если поток daemon, он будет убит при выходе из main, но пауза помогает завершить текущий цикл.
         time.sleep(2) 
         logging.info("Trading bot stopped")
         return jsonify({'message': 'Бот успешно остановлен', 'status': 'stopped'})
@@ -384,7 +386,7 @@ def api_delete_last_trade():
 def api_reset_balance():
     """Reset balance to $100 and reset trade counter"""
     try:
-        START_BANK = 100.0 # Используем фиксированную сумму, как в trading_bot
+        START_BANK = 100.0 
         state['balance'] = START_BANK
         state['available'] = START_BANK
         state['in_position'] = False
