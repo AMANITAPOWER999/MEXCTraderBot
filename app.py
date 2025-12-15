@@ -79,12 +79,22 @@ def api_status():
     try:
         # Получаем текущие направления SAR
         directions = {}
+        # Получаем текущую цену
+        current_price = 3000.0
+
         if bot_instance:
             directions = bot_instance.get_current_directions()
+            current_price = bot_instance.get_current_price()
         
-        # Получаем текущую цену
-        current_price = bot_instance.get_current_price() if bot_instance else 3000.0
+        # Получаем номер последней сделки для отображения
+        trade_counter = state.get('telegram_trade_counter', 0)
+        # Если сделка в позиции, берем ее номер. Иначе - последний закрытый номер.
+        if state.get('in_position') and state.get('position'):
+            current_trade_number = state['position'].get('trade_number', trade_counter + 1)
+        else:
+            current_trade_number = trade_counter
         
+
         return jsonify({
             'bot_running': bot_running,
             'paper_mode': os.getenv('RUN_IN_PAPER', '1') == '1',
@@ -95,11 +105,13 @@ def api_status():
             'current_price': current_price,
             'directions': directions,
             'sar_directions': directions,
-            'trades': state.get('trades', [])
+            'trades': state.get('trades', []),
+            'current_trade_number': current_trade_number # Добавлено для отображения в дашборде
         })
     except Exception as e:
         logging.error(f"Status error: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/start_bot', methods=['POST'])
 def api_start_bot():
@@ -131,6 +143,8 @@ def api_stop_bot():
     
     try:
         bot_running = False
+        # Добавляем паузу, чтобы поток успел завершиться после остановки
+        time.sleep(2) 
         logging.info("Trading bot stopped")
         return jsonify({'message': 'Бот успешно остановлен', 'status': 'stopped'})
     except Exception as e:
@@ -304,8 +318,8 @@ def api_chart_data():
                 })
                 
                 # Exit marker
-                exit_time_str = trade.get('exit_time')
-                if exit_time_str:
+                exit_time_str = trade.get('time')
+                if exit_time_str: # In current state, 'time' holds exit time
                     exit_time = datetime.fromisoformat(exit_time_str)
                     markers.append({
                         'time': exit_time.strftime('%H:%M'),
@@ -347,9 +361,15 @@ def api_delete_last_trade():
         if len(trades) == 0:
             return jsonify({'error': 'No trades to delete'}), 400
         
-        deleted_trade = trades.pop()
+        deleted_trade = trades.pop(0) # Удаляем самую последнюю (самую верхнюю) сделку
         state['trades'] = trades
         
+        # Обновляем счетчик сделок, чтобы он соответствовал последнему номеру
+        if 'telegram_trade_counter' in state:
+            state['telegram_trade_counter'] = state.get('telegram_trade_counter', 1) - 1
+            if state['telegram_trade_counter'] < 0:
+                 state['telegram_trade_counter'] = 0
+
         # Save state
         if bot_instance:
             bot_instance.save_state_to_file()
@@ -364,21 +384,21 @@ def api_delete_last_trade():
 def api_reset_balance():
     """Reset balance to $100 and reset trade counter"""
     try:
-        state['balance'] = 100.0
-        state['available'] = 100.0
+        START_BANK = 100.0 # Используем фиксированную сумму, как в trading_bot
+        state['balance'] = START_BANK
+        state['available'] = START_BANK
         state['in_position'] = False
         state['position'] = None
         state['trades'] = []
-        # Reset trade counter to start from 1
-        if 'telegram_trade_counter' in state:
-            del state['telegram_trade_counter']
+        # Reset trade counter to 0 (next trade will be number 1)
+        state['telegram_trade_counter'] = 0
         
         # Save state
         if bot_instance:
             bot_instance.save_state_to_file()
         
         logging.info("Balance reset to $100 and trade counter reset")
-        return jsonify({'message': 'Balance reset to $100, trades cleared, counter reset to 1', 'balance': 100.0})
+        return jsonify({'message': 'Balance reset to $100, trades cleared, counter reset', 'balance': START_BANK})
     except Exception as e:
         logging.error(f"Reset balance error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -390,7 +410,10 @@ def api_send_current_position():
         if not telegram_notifier:
             return jsonify({'error': 'Telegram not configured'}), 400
         
-        current_price = bot_instance.get_current_price() if bot_instance else 0
+        if not bot_instance:
+            return jsonify({'error': 'Бот не инициализирован'}), 500
+
+        current_price = bot_instance.get_current_price()
         position = state.get('position')
         balance = state.get('balance', 0)
         
