@@ -467,7 +467,9 @@ class TradingBot:
                     time.sleep(5)
                     continue
 
-                dir_1m = dirs["1m"]
+# ... (код выше без изменений)
+
+                dir_1m = dirs["1m"]
                 dir_5m = dirs["5m"]
                 dir_15m = dirs["15m"]
                 
@@ -536,4 +538,5 @@ class TradingBot:
                         # нет общего сигнала
                         pass
 
-                time.sleep(5)
+                time.sleep(5)  # маленькая пауза в основном цикле
+# ... (код ниже без изменений)
