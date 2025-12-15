@@ -493,8 +493,8 @@ class TradingBot:
                         continue
                     
                     # Закрытие по смене 1m SAR (мгновенно)
-                    if dir_5m != state["position"]["side"]:
-                        logging.info("Closing because 5m SAR changed")
+                    if dir_1m != state["position"]["side"]:
+                        logging.info("Closing because 1m SAR changed")
                         self.close_position(close_reason="sar_reversal")
                         state["skip_next_signal"] = True  # устанавливаем флаг пропуска
                         self.save_state_to_file()
@@ -515,8 +515,8 @@ class TradingBot:
                     
                     # Вход когда 15m и 1m SAR совпадают (только если не нужно пропускать)
                     # SAR-ONLY стратегия: вход при совпадении 15m и 1m SAR
-                    if dir_1m in ["long", "short"] and dir_1m == dir_5m and not state["skip_next_signal"]:
-                        logging.info(f"✅ Entry signal: 5m SAR = 1m SAR = {dir_5m.upper()}")
+                    if dir_1m in ["long", "short"] and dir_1m == dir_15m and not state["skip_next_signal"]:
+                        logging.info(f"✅ Entry signal: 15m SAR = 1m SAR = {dir_1m.upper()}")
                         
                         # вход в позицию
                         side = "buy" if dir_1m == "long" else "sell"
@@ -530,8 +530,8 @@ class TradingBot:
                         
                         self.save_state_to_file()
                         time.sleep(1)
-                    elif state["skip_next_signal"] and dir_1m in ["long", "short"] and dir_1m == dir_5m:
-                        logging.info(f"🔄 Skip flag active: 5m:{dir_5m} = 1m:{dir_1m} (will trade after next 1m change)")
+                    elif state["skip_next_signal"] and dir_1m in ["long", "short"] and dir_1m == dir_15m:
+                        logging.info(f"🔄 Skip flag active: 15m:{dir_15m} = 1m:{dir_1m} (will trade after next 1m change)")
                     else:
                         # нет общего сигнала
                         pass
@@ -540,3 +540,4 @@ class TradingBot:
             except Exception as e:
                 logging.error(f"Main loop error: {e}")
                 time.sleep(5)
+
