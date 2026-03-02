@@ -2,13 +2,12 @@ import os
 import time
 import json
 import threading
-import random
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime
 
 import ccxt
 import pandas as pd
 from ta.trend import PSARIndicator
-import logging
 from market_simulator import MarketSimulator
 from signal_sender import SignalSender
 
@@ -24,7 +23,7 @@ ISOLATED = True
 POSITION_PERCENT = 0.10
 TIMEFRAMES = {"1m": 1, "5m": 5, "30m": 30}
 START_BANK = 100.0
-DASHBOARD_MAX = 20
+STATE_FILE = "goldantilopaeth500_state.json"
 
 # ========== Глобальные переменные состояния ==========
 state = {
@@ -42,11 +41,9 @@ class TradingBot:
         self.signal_sender = SignalSender()
         
         if USE_SIMULATOR:
-            logging.info("Initializing market simulator")
             self.simulator = MarketSimulator(initial_price=3000, volatility=0.02)
             self.exchange = None
         else:
-            logging.info("Initializing ASCENDEX exchange connection")
             self.simulator = None
             self.exchange = ccxt.ascendex({
                 "apiKey": API_KEY,
@@ -54,34 +51,26 @@ class TradingBot:
                 "enableRateLimit": True,
                 "options": {"defaultType": "swap"}
             })
-            
-            if API_KEY and API_SECRET:
-                try:
-                    if ISOLATED:
-                        self.exchange.set_margin_mode('isolated', SYMBOL)
-                    self.exchange.set_leverage(LEVERAGE, SYMBOL)
-                except Exception as e:
-                    logging.error(f"Failed to configure leverage/margin: {e}")
         
         self.load_state_from_file()
         
     def save_state_to_file(self):
+        """Принудительная запись состояния на диск для Flask"""
         try:
-            with open("goldantilopaeth500_state.json", "w") as f:
+            with open(STATE_FILE, "w") as f:
                 json.dump(state, f, default=str, indent=2)
+            # logging.info("State saved successfully")
         except Exception as e:
             logging.error(f"Save error: {e}")
 
     def load_state_from_file(self):
         try:
-            with open("goldantilopaeth500_state.json", "r") as f:
-                data = json.load(f)
-                state.update(data)
-        except:
-            pass
-
-    def now(self):
-        return datetime.utcnow()
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE, "r") as f:
+                    data = json.load(f)
+                    state.update(data)
+        except Exception as e:
+            logging.error(f"Load error: {e}")
 
     def fetch_ohlcv_tf(self, tf: str, limit=200):
         try:
@@ -89,81 +78,61 @@ class TradingBot:
                 ohlcv = self.simulator.fetch_ohlcv(tf, limit=limit)
             else:
                 ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
-            
             if not ohlcv: return None
             df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
             return df
         except Exception as e:
-            logging.error(f"Error fetching {tf} ohlcv: {e}")
-            return None
-
-    def compute_psar(self, df: pd.DataFrame):
-        if df is None or len(df) < 5: return None
-        try:
-            psar_ind = PSARIndicator(high=df["high"], low=df["low"], close=df["close"], step=0.05, max_step=0.5)
-            return psar_ind.psar()
-        except Exception as e:
-            logging.error(f"PSAR compute error: {e}")
+            logging.error(f"Error fetching {tf}: {e}")
             return None
 
     def get_direction_from_psar(self, df: pd.DataFrame):
-        psar = self.compute_psar(df)
-        if psar is None: return None
+        if df is None or len(df) < 5: return None
+        psar = PSARIndicator(high=df["high"], low=df["low"], close=df["close"], step=0.05, max_step=0.5).psar()
         return "long" if df["close"].iloc[-1] > psar.iloc[-1] else "short"
 
     def get_current_directions(self):
         directions = {}
         for tf in TIMEFRAMES.keys():
             df = self.fetch_ohlcv_tf(tf)
-            if df is not None:
-                directions[tf] = self.get_direction_from_psar(df)
-            else:
-                directions[tf] = None
+            directions[tf] = self.get_direction_from_psar(df)
         return directions
 
-    def compute_order_size_usdt(self, balance, price):
-        notional = balance * POSITION_PERCENT * LEVERAGE
-        base_amount = notional / price
-        return base_amount, notional
+    def get_current_price(self):
+        try:
+            if USE_SIMULATOR: return self.simulator.get_current_price()
+            return float(self.exchange.fetch_ticker(SYMBOL)["last"])
+        except: return 3000.0
 
     def place_market_order(self, side: str, amount_base: float):
-        # side приходит как 'buy' или 'sell'
         price = self.get_current_price()
-        # Определяем направление для сохранения в state
         pos_dir = "long" if side == "buy" else "short"
         
-        logging.info(f"[{self.now()}] OPENING {pos_dir.upper()} ({side}) amount={amount_base:.6f}")
-        
         if RUN_IN_PAPER:
-            entry_time = datetime.utcnow()
             margin = (amount_base * price) / LEVERAGE
             state["available"] -= margin
             state["in_position"] = True
             state["position"] = {
-                "side": pos_dir,  # Сохраняем именно 'long'/'short' для PSAR
+                "side": pos_dir,
                 "entry_price": price,
                 "size_base": amount_base,
                 "notional": amount_base * price,
                 "margin": margin,
-                "entry_time": entry_time.isoformat()
+                "entry_time": datetime.utcnow().isoformat()
             }
             
-            # Отправка сигнала в ngrok
             if side == "buy": self.signal_sender.send_open_long()
             else: self.signal_sender.send_open_short()
             
-            if self.notifier:
-                self.notifier.send_position_opened(state["position"], price, len(state["trades"])+1, state["balance"])
+            self.save_state_to_file()
+            logging.info(f"✅ Position OPENED: {pos_dir.upper()}")
             return state["position"]
-        return None
 
     def close_position(self, close_reason="unknown"):
-        if not state["in_position"] or not state["position"]: return None
+        if not state["in_position"] or not state["position"]: 
+            return None
+            
         pos = state["position"]
         price = self.get_current_price()
-        
-        logging.info(f"[{self.now()}] CLOSING {pos['side'].upper()} Reason: {close_reason}")
         
         if RUN_IN_PAPER:
             pnl = (price - pos["entry_price"]) * pos["size_base"] if pos["side"] == "long" else (pos["entry_price"] - price) * pos["size_base"]
@@ -176,70 +145,48 @@ class TradingBot:
             trade = {
                 "time": datetime.utcnow().isoformat(),
                 "side": pos["side"],
-                "entry_price": pos["entry_price"],
-                "exit_price": price,
                 "pnl": pnl_after_fee,
                 "close_reason": close_reason
             }
             
-            # Сигналы закрытия в ngrok
+            # СИГНАЛЫ
             if pos["side"] == "long": self.signal_sender.send_close_long()
             else: self.signal_sender.send_close_short()
             
-            if self.notifier:
-                self.notifier.send_position_closed(trade, len(state["trades"]), state["balance"])
-                
+            # ОЧИСТКА СОСТОЯНИЯ
             state["trades"].insert(0, trade)
             state["in_position"] = False
             state["position"] = None
+            
+            # КРИТИЧЕСКИЙ МОМЕНТ: Сохраняем немедленно
             self.save_state_to_file()
+            logging.info(f"🛑 Position CLOSED. Reason: {close_reason}. State Reset.")
             return trade
 
-    def get_current_price(self):
-        try:
-            if USE_SIMULATOR and self.simulator: return self.simulator.get_current_price()
-            ticker = self.exchange.fetch_ticker(SYMBOL)
-            return float(ticker["last"])
-        except: return 3000.0
-
     def strategy_loop(self, should_continue=lambda: True):
-        logging.info(f"Strategy Loop Started. Filter: Entry(1m+30m Match), Exit(1m Change)")
-        
+        logging.info("Strategy Loop Active (1m + 30m)")
         while should_continue():
             try:
-                # 1. Получаем текущие индикаторы
-                current_dirs = self.get_current_directions()
-                dir_1m = current_dirs.get("1m")
-                dir_30m = current_dirs.get("30m")
+                dirs = self.get_current_directions()
+                dir_1m, dir_30m = dirs.get("1m"), dirs.get("30m")
 
-                if dir_1m is None or dir_30m is None:
-                    time.sleep(10)
-                    continue
+                if not dir_1m or not dir_30m:
+                    time.sleep(5); continue
 
-                logging.info(f"[{self.now()}] STATUS | 1m:{dir_1m} | 30m:{dir_30m} | InPos:{state['in_position']}")
-
-                # 2. Логика управления позицией
+                # ПРОВЕРКА ВЫХОДА
                 if state["in_position"] and state["position"]:
-                    # ВАЖНО: Сравнение текущего 1m с направлением открытой позиции
                     if dir_1m != state["position"]["side"]:
-                        logging.info(f"🛑 REVERSAL: 1m changed to {dir_1m}. Closing {state['position']['side']}")
                         self.close_position(close_reason="sar_1m_reversal")
-                        time.sleep(5)
                 
-                else:
-                    # Вход только если 1m и 30m совпадают
+                # ПРОВЕРКА ВХОДА
+                elif not state["in_position"]:
                     if dir_1m == dir_30m:
-                        logging.info(f"🎯 SIGNAL: 1m & 30m match ({dir_1m})")
-                        order_side = "buy" if dir_1m == "long" else "sell"
-                        
+                        side = "buy" if dir_1m == "long" else "sell"
                         price = self.get_current_price()
-                        size_base, _ = self.compute_order_size_usdt(state["balance"], price)
-                        
-                        self.place_market_order(order_side, size_base)
-                        self.save_state_to_file()
-                        time.sleep(5)
+                        notional = state["balance"] * POSITION_PERCENT * LEVERAGE
+                        self.place_market_order(side, notional / price)
 
-                time.sleep(15) 
+                time.sleep(15)
             except Exception as e:
-                logging.error(f"Strategy Loop error: {e}")
+                logging.error(f"Loop error: {e}")
                 time.sleep(10)
