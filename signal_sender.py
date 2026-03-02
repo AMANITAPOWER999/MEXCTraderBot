@@ -1,11 +1,10 @@
-cat <<EOF > signal_sender.py
 import requests
 import logging
 import os
 
 class SignalSender:
     def __init__(self):
-        # Берем URL из переменных окружения, если его нет - используем localhost
+        # Берем URL из переменных окружения (в Railway), если нет - используем localhost
         self.url = os.getenv("SIGNAL_WEBHOOK_URL", "http://localhost:5000/trade/start")
         self.target_url = "https://www.mexc.com/ru-RU/futures/SOL_USDT"
         
@@ -33,4 +32,3 @@ class SignalSender:
     def send_close_long(self): return self.send_signal("Long", "CLOSE")
     def send_open_short(self): return self.send_signal("Short", "OPEN")
     def send_close_short(self): return self.send_signal("Short", "CLOSE")
-EOF
