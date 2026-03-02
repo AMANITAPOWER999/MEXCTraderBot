@@ -112,9 +112,7 @@ class TradingBot:
         if psar is None: return None
         return "long" if df["close"].iloc[-1] > psar.iloc[-1] else "short"
 
-    # --- НОВЫЙ МЕТОД ДЛЯ API ---
     def get_current_directions(self):
-        """Возвращает текущие направления для Flask API"""
         directions = {}
         for tf in TIMEFRAMES.keys():
             df = self.fetch_ohlcv_tf(tf)
@@ -130,8 +128,12 @@ class TradingBot:
         return base_amount, notional
 
     def place_market_order(self, side: str, amount_base: float):
-        logging.info(f"[{self.now()}] OPENING {side.upper()} amount={amount_base:.6f}")
+        # side приходит как 'buy' или 'sell'
         price = self.get_current_price()
+        # Определяем направление для сохранения в state
+        pos_dir = "long" if side == "buy" else "short"
+        
+        logging.info(f"[{self.now()}] OPENING {pos_dir.upper()} ({side}) amount={amount_base:.6f}")
         
         if RUN_IN_PAPER:
             entry_time = datetime.utcnow()
@@ -139,14 +141,15 @@ class TradingBot:
             state["available"] -= margin
             state["in_position"] = True
             state["position"] = {
-                "side": "long" if side == "buy" else "short",
+                "side": pos_dir,  # Сохраняем именно 'long'/'short' для PSAR
                 "entry_price": price,
                 "size_base": amount_base,
                 "notional": amount_base * price,
                 "margin": margin,
                 "entry_time": entry_time.isoformat()
             }
-            # Сигнал в ngrok
+            
+            # Отправка сигнала в ngrok
             if side == "buy": self.signal_sender.send_open_long()
             else: self.signal_sender.send_open_short()
             
@@ -156,9 +159,11 @@ class TradingBot:
         return None
 
     def close_position(self, close_reason="unknown"):
-        if not state["in_position"]: return None
+        if not state["in_position"] or not state["position"]: return None
         pos = state["position"]
         price = self.get_current_price()
+        
+        logging.info(f"[{self.now()}] CLOSING {pos['side'].upper()} Reason: {close_reason}")
         
         if RUN_IN_PAPER:
             pnl = (price - pos["entry_price"]) * pos["size_base"] if pos["side"] == "long" else (pos["entry_price"] - price) * pos["size_base"]
@@ -177,7 +182,7 @@ class TradingBot:
                 "close_reason": close_reason
             }
             
-            # Сигнал в ngrok
+            # Сигналы закрытия в ngrok
             if pos["side"] == "long": self.signal_sender.send_close_long()
             else: self.signal_sender.send_close_short()
             
@@ -192,43 +197,49 @@ class TradingBot:
 
     def get_current_price(self):
         try:
-            if USE_SIMULATOR: return self.simulator.get_current_price()
+            if USE_SIMULATOR and self.simulator: return self.simulator.get_current_price()
             ticker = self.exchange.fetch_ticker(SYMBOL)
             return float(ticker["last"])
         except: return 3000.0
 
     def strategy_loop(self, should_continue=lambda: True):
-        logging.info(f"Strategy Loop Started. Logic: Entry(1m+30m match), Exit(1m Change)")
+        logging.info(f"Strategy Loop Started. Filter: Entry(1m+30m Match), Exit(1m Change)")
         
         while should_continue():
             try:
-                # Получаем направления
+                # 1. Получаем текущие индикаторы
                 current_dirs = self.get_current_directions()
                 dir_1m = current_dirs.get("1m")
                 dir_30m = current_dirs.get("30m")
 
                 if dir_1m is None or dir_30m is None:
-                    logging.warning("Waiting for OHLCV data...")
                     time.sleep(10)
                     continue
 
-                logging.info(f"[{self.now()}] PSAR Directions: 1m:{dir_1m} | 5m:{current_dirs.get('5m')} | 30m:{dir_30m}")
+                logging.info(f"[{self.now()}] STATUS | 1m:{dir_1m} | 30m:{dir_30m} | InPos:{state['in_position']}")
 
-                if state["in_position"]:
-                    # Выход: если 1m SAR сменил направление против позиции
+                # 2. Логика управления позицией
+                if state["in_position"] and state["position"]:
+                    # ВАЖНО: Сравнение текущего 1m с направлением открытой позиции
                     if dir_1m != state["position"]["side"]:
-                        logging.info(f"⚠️ EXIT: 1m flipped to {dir_1m}")
+                        logging.info(f"🛑 REVERSAL: 1m changed to {dir_1m}. Closing {state['position']['side']}")
                         self.close_position(close_reason="sar_1m_reversal")
+                        time.sleep(5)
+                
                 else:
-                    # Вход: если 1m и 30m совпадают
+                    # Вход только если 1m и 30m совпадают
                     if dir_1m == dir_30m:
-                        logging.info(f"🚀 ENTRY: 1m matches 30m ({dir_1m})")
-                        side = "buy" if dir_1m == "long" else "sell"
-                        size_base, _ = self.compute_order_size_usdt(state["balance"], self.get_current_price())
-                        self.place_market_order(side, size_base)
+                        logging.info(f"🎯 SIGNAL: 1m & 30m match ({dir_1m})")
+                        order_side = "buy" if dir_1m == "long" else "sell"
+                        
+                        price = self.get_current_price()
+                        size_base, _ = self.compute_order_size_usdt(state["balance"], price)
+                        
+                        self.place_market_order(order_side, size_base)
                         self.save_state_to_file()
+                        time.sleep(5)
 
-                time.sleep(15) # Пауза между проверками
+                time.sleep(15) 
             except Exception as e:
                 logging.error(f"Strategy Loop error: {e}")
                 time.sleep(10)
