@@ -1,0 +1,21 @@
+{
+  "balance": 100.0,
+  "available": 89.99974578770222,
+  "in_position": true,
+  "position": {
+    "side": "long",
+    "entry_price": 1966.91,
+    "size_base": 2.542122977741171,
+    "notional": 5000.127106148887,
+    "margin": 10.000254212297774,
+    "entry_time": "2026-03-02T05:15:32.133067",
+    "close_time_seconds": 598,
+    "trade_number": 1
+  },
+  "last_trade_time": "2026-03-02T05:15:32.133067",
+  "last_1m_dir": "long",
+  "one_min_flip_count": 0,
+  "skip_next_signal": false,
+  "trades": [],
+  "telegram_trade_counter": 1
+}
