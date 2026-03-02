@@ -11,24 +11,21 @@ from ta.trend import PSARIndicator
 import logging
 from market_simulator import MarketSimulator
 from signal_sender import SignalSender
-# Google Sheets integration removed
 
 # ========== Конфигурация ==========
 API_KEY = os.getenv("ASCENDEX_API_KEY", "")
 API_SECRET = os.getenv("ASCENDEX_SECRET", "")
 RUN_IN_PAPER = True
-USE_SIMULATOR = os.getenv("USE_SIMULATOR", "0") == "1"  # Переключаемся на реальные данные с новыми API ключами
+USE_SIMULATOR = os.getenv("USE_SIMULATOR", "0") == "1"
 
-SYMBOL = "ETH/USDT:USDT"  # ASCENDEX futures symbol format  # инструмент
-LEVERAGE = 500  # плечо x500
-ISOLATED = True  # изолированная маржа
-POSITION_PERCENT = 0.10  # 10% от доступного баланса
-TIMEFRAMES = {"1m": 1, "5m": 5, "30m": 30}  # Обновлено: 15м заменено на 30м
-MIN_TRADE_SECONDS = 120  # минимальная длительность сделки 2 минуты
-MIN_RANDOM_TRADE_SECONDS = 480  # минимальная случайная длительность сделки 8 минут
-MAX_RANDOM_TRADE_SECONDS = 780  # максимальная случайная длительность сделки 13 минут
-PAUSE_BETWEEN_TRADES = 0  # пауза между сделками убрана
-START_BANK = 100.0  # стартовый банк (для бумажной торговли / учета)
+SYMBOL = "ETH/USDT:USDT"  # Инструмент
+LEVERAGE = 500            # Плечо x500
+ISOLATED = True           # Изолированная маржа
+POSITION_PERCENT = 0.10   # 10% от баланса
+TIMEFRAMES = {"1m": 1, "5m": 5, "30m": 30} # 15м заменено на 30м
+MIN_RANDOM_TRADE_SECONDS = 480
+MAX_RANDOM_TRADE_SECONDS = 780
+START_BANK = 100.0
 DASHBOARD_MAX = 20
 
 # ========== Глобальные переменные состояния ==========
@@ -38,22 +35,17 @@ state = {
     "in_position": False,
     "position": None,  # dict: {side, entry_price, size_base, entry_time}
     "last_trade_time": None,
-    "last_1m_dir": None,
-    "one_min_flip_count": 0,
-    "skip_next_signal": False,  # пропускать следующий сигнал входа
-    "trades": []  # список последних сделок
+    "trades": []
 }
 
 class TradingBot:
     def __init__(self, telegram_notifier=None):
         self.notifier = telegram_notifier
         self.signal_sender = SignalSender()
-        # Google Sheets integration removed
         
-        # Выбираем режим работы: симулятор или реальная биржа
         if USE_SIMULATOR:
             logging.info("Initializing market simulator")
-            self.simulator = MarketSimulator(initial_price=60000, volatility=0.02)
+            self.simulator = MarketSimulator(initial_price=3000, volatility=0.02)
             self.exchange = None
         else:
             logging.info("Initializing ASCENDEX exchange connection")
@@ -61,28 +53,17 @@ class TradingBot:
             self.exchange = ccxt.ascendex({
                 "apiKey": API_KEY,
                 "secret": API_SECRET,
-                "sandbox": False,
                 "enableRateLimit": True,
-                "options": {
-                    "defaultType": "swap",  # Enable futures/swap trading for leverage
-                }
+                "options": {"defaultType": "swap"}
             })
-            logging.info("ASCENDEX configured for swap/futures trading with leverage support")
             
-            # Configure leverage and margin mode during initialization
             if API_KEY and API_SECRET:
                 try:
-                    # Set margin mode to isolated
                     if ISOLATED:
                         self.exchange.set_margin_mode('isolated', SYMBOL)
-                        logging.info(f"Margin mode set to ISOLATED for {SYMBOL}")
-                    
-                    # Set leverage
                     self.exchange.set_leverage(LEVERAGE, SYMBOL)
-                    logging.info(f"Leverage set to {LEVERAGE}x for {SYMBOL}")
                 except Exception as e:
-                    logging.error(f"Failed to configure leverage/margin mode: {e}")
-                    logging.error("Trading will continue in paper mode to avoid order rejections")
+                    logging.error(f"Failed to configure leverage/margin: {e}")
         
         self.load_state_from_file()
         
@@ -105,22 +86,14 @@ class TradingBot:
         return datetime.utcnow()
 
     def fetch_ohlcv_tf(self, tf: str, limit=200):
-        """
-        Возвращает pd.DataFrame с колонками: timestamp, open, high, low, close, volume
-        """
         try:
             if USE_SIMULATOR and self.simulator:
-                # Используем симулятор
                 ohlcv = self.simulator.fetch_ohlcv(tf, limit=limit)
             else:
-                # Используем реальную биржу
                 ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
             
-            if not ohlcv:
-                return None
-                
-            df = pd.DataFrame(ohlcv)
-            df.columns = ["timestamp", "open", "high", "low", "close", "volume"]
+            if not ohlcv: return None
+            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
             df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
             return df
         except Exception as e:
@@ -128,400 +101,124 @@ class TradingBot:
             return None
 
     def compute_psar(self, df: pd.DataFrame):
-        """
-        Возвращает Series с PSAR (последняя точка).
-        Используем ta.trend.PSARIndicator
-        """
-        if df is None or len(df) < 5:
-            return None
+        if df is None or len(df) < 5: return None
         try:
-            high_series = pd.Series(df["high"].values)
-            low_series = pd.Series(df["low"].values)
-            close_series = pd.Series(df["close"].values)
-            # Повышенная чувствительность SAR (увеличены step и max_step умеренно)
-            psar_ind = PSARIndicator(high=high_series, low=low_series, close=close_series, step=0.05, max_step=0.5)
-            psar = psar_ind.psar()
-            return psar
+            psar_ind = PSARIndicator(high=df["high"], low=df["low"], close=df["close"], step=0.05, max_step=0.5)
+            return psar_ind.psar()
         except Exception as e:
             logging.error(f"PSAR compute error: {e}")
             return None
 
     def get_direction_from_psar(self, df: pd.DataFrame):
-        """
-        Возвращает направление 'long' или 'short' на основе сравнения последней close и psar
-        """
         psar = self.compute_psar(df)
-        if psar is None:
-            return None
-        last_psar = psar.iloc[-1]
-        last_close = df["close"].iloc[-1]
-        return "long" if last_close > last_psar else "short"
-
-
-    def get_current_directions(self):
-        """Get current PSAR directions for all timeframes"""
-        directions = {}
-        for tf in TIMEFRAMES.keys():
-            df = self.fetch_ohlcv_tf(tf)
-            if df is not None:
-                directions[tf] = self.get_direction_from_psar(df)
-            else:
-                directions[tf] = None
-        return directions
+        if psar is None: return None
+        return "long" if df["close"].iloc[-1] > psar.iloc[-1] else "short"
 
     def compute_order_size_usdt(self, balance, price):
-        # позиция (ноционал) = balance * POSITION_PERCENT * LEVERAGE
         notional = balance * POSITION_PERCENT * LEVERAGE
-        base_amount = notional / price  # количество базового актива (ETH)
+        base_amount = notional / price
         return base_amount, notional
 
     def place_market_order(self, side: str, amount_base: float):
-        """
-        side: 'buy' или 'sell' (для открытия позиции)
-        amount_base: количество в базовой валюте (ETH)
-        """
-        logging.info(f"[{self.now()}] PLACE MARKET ORDER -> side={side}, amount={amount_base:.6f}")
+        logging.info(f"[{self.now()}] OPENING {side.upper()} amount={amount_base:.6f}")
+        price = self.get_current_price()
         
-        if RUN_IN_PAPER or API_KEY == "" or API_SECRET == "":
-            # Бумажная торговля — симулируем ордер
-            price = self.get_current_price()
-            entry_price = price
+        if RUN_IN_PAPER:
             entry_time = datetime.utcnow()
-            notional = amount_base * entry_price
-            margin = notional / LEVERAGE  # Маржа, которую нужно зарезервировать
-            
-            # Вычитаем маржу из доступного баланса
+            margin = (amount_base * price) / LEVERAGE
             state["available"] -= margin
-            
-            # Генерируем случайное время закрытия от 8 до 13 минут
-            close_time_seconds = random.randint(MIN_RANDOM_TRADE_SECONDS, MAX_RANDOM_TRADE_SECONDS)
-            
-            # Генерируем номер сделки для Telegram (отдельный счетчик)
-            if "telegram_trade_counter" not in state:
-                state["telegram_trade_counter"] = 1
-            else:
-                state["telegram_trade_counter"] += 1
-            trade_number = state["telegram_trade_counter"]
-            
             state["in_position"] = True
             state["position"] = {
                 "side": "long" if side == "buy" else "short",
-                "entry_price": entry_price,
+                "entry_price": price,
                 "size_base": amount_base,
-                "notional": notional,
-                "margin": margin,  # Сохраняем маржу для возврата при закрытии
-                "entry_time": entry_time.isoformat(),
-                "close_time_seconds": close_time_seconds,  # Случайное время закрытия для этой позиции
-                "trade_number": trade_number  # Сохраняем номер сделки
+                "notional": amount_base * price,
+                "margin": margin,
+                "entry_time": entry_time.isoformat()
             }
-            state["last_trade_time"] = entry_time.isoformat()
+            # Отправка сигнала
+            if side == "buy": self.signal_sender.send_open_long()
+            else: self.signal_sender.send_open_short()
             
-            # Логируем информацию об открытой позиции с случайным временем закрытия
-            logging.info(f"Position opened with random close time: {close_time_seconds}s ({close_time_seconds/60:.1f} minutes)")
-            
-            # Send Telegram notification for position opening
             if self.notifier:
-                self.notifier.send_position_opened(state["position"], price, trade_number, state["balance"])
-            
-            # Send signal to external service
-            if state["position"]["side"] == "long":
-                self.signal_sender.send_open_long()
-            else:
-                self.signal_sender.send_open_short()
-            
-            # Google Sheets reporting removed
-            
+                self.notifier.send_position_opened(state["position"], price, len(state["trades"])+1, state["balance"])
             return state["position"]
-        else:
-            # Реальная торговля
-            try:
-                # Установка плеча
-                try:
-                    self.exchange.set_leverage(LEVERAGE, SYMBOL)
-                except Exception as e:
-                    logging.error(f"set_leverage failed: {e}")
-
-                # Создание рыночного ордера
-                order = self.exchange.create_market_buy_order(SYMBOL, amount_base) if side == "buy" else self.exchange.create_market_sell_order(SYMBOL, amount_base)
-                logging.info(f"Order response: {order}")
-                
-                # После успешного создания заполняем state
-                entry_price = float(order.get("average", order.get("price", self.get_current_price())))
-                entry_time = datetime.utcnow()
-                notional = amount_base * entry_price
-                margin = notional / LEVERAGE  # Маржа, которую нужно зарезервировать
-                
-                # Вычитаем маржу из доступного баланса
-                state["available"] -= margin
-                
-                # Генерируем случайное время закрытия от 8 до 13 минут
-                close_time_seconds = random.randint(MIN_RANDOM_TRADE_SECONDS, MAX_RANDOM_TRADE_SECONDS)
-                
-                state["in_position"] = True
-                state["position"] = {
-                    "side": "long" if side == "buy" else "short",
-                    "entry_price": entry_price,
-                    "size_base": amount_base,
-                    "notional": notional,
-                    "margin": margin,  # Сохраняем маржу для возврата при закрытии
-                    "entry_time": entry_time.isoformat(),
-                    "close_time_seconds": close_time_seconds  # Случайное время закрытия для этой позиции
-                }
-                state["last_trade_time"] = entry_time.isoformat()
-                
-                # Логируем информацию об открытой позиции с случайным временем закрытия
-                logging.info(f"Position opened with random close time: {close_time_seconds}s ({close_time_seconds/60:.1f} minutes)")
-                
-                # Send signal to external service
-                if state["position"]["side"] == "long":
-                    self.signal_sender.send_open_long()
-                else:
-                    self.signal_sender.send_open_short()
-                
-                # Telegram notification removed (already sent in paper trading branch)
-                
-                return state["position"]
-            except Exception as e:
-                logging.error(f"place_market_order error: {e}")
-                return None
+        return None
 
     def close_position(self, close_reason="unknown"):
-        if not state["in_position"] or not state["position"]:
-            return None
-            
-        side = state["position"]["side"]
-        size = state["position"]["size_base"]
-        # Для закрытия: делаем ордер в противоположную сторону
-        close_side = "sell" if side == "long" else "buy"
-        logging.info(f"[{self.now()}] CLOSE POSITION -> {close_side} {size:.6f}")
+        if not state["in_position"]: return None
+        pos = state["position"]
+        price = self.get_current_price()
         
-        if RUN_IN_PAPER or API_KEY == "" or API_SECRET == "":
-            # симуляция: считаем результат PnL по цене закрытия
-            price = self.get_current_price()
-            entry_price = state["position"]["entry_price"]
-            notional = state["position"]["notional"]
-            
-            if state["position"]["side"] == "long":
-                pnl = (price - entry_price) * size
-            else:
-                pnl = (entry_price - price) * size
-                
-            # Учитываем комиссии упрощённо (0.03% на сделку)
-            fee = abs(notional) * 0.0003
+        if RUN_IN_PAPER:
+            pnl = (price - pos["entry_price"]) * pos["size_base"] if pos["side"] == "long" else (pos["entry_price"] - price) * pos["size_base"]
+            fee = abs(pos["notional"]) * 0.0003
             pnl_after_fee = pnl - fee
             
-            # Возвращаем маржу + PnL
-            margin = state["position"].get("margin", notional / LEVERAGE)
-            previous_balance = state["balance"]
-            state["available"] += margin + pnl_after_fee  # Возвращаем маржу + PnL
+            state["available"] += pos["margin"] + pnl_after_fee
             state["balance"] = state["available"]
             
             trade = {
                 "time": datetime.utcnow().isoformat(),
-                "side": state["position"]["side"],
-                "entry_price": entry_price,
+                "side": pos["side"],
+                "entry_price": pos["entry_price"],
                 "exit_price": price,
-                "size_base": size,
                 "pnl": pnl_after_fee,
-                "notional": notional,
-                "duration": self.calculate_duration(state["position"]["entry_time"]),
                 "close_reason": close_reason
             }
             
-            # Send Telegram notification for position closing
+            if pos["side"] == "long": self.signal_sender.send_close_long()
+            else: self.signal_sender.send_close_short()
+            
             if self.notifier:
-                trade_number = state["position"].get("trade_number", 1)
-                self.notifier.send_position_closed(trade, trade_number, state["balance"])
-                # Balance update notification removed by user request
-            
-            # Send signal to external service
-            if state["position"]["side"] == "long":
-                self.signal_sender.send_close_long()
-            else:
-                self.signal_sender.send_close_short()
-            
-            # Google Sheets reporting removed
-            
-            self.append_trade(trade)
-            
-            # сброс позиции
+                self.notifier.send_position_closed(trade, len(state["trades"]), state["balance"])
+                
+            state["trades"].insert(0, trade)
             state["in_position"] = False
             state["position"] = None
-            state["last_trade_time"] = datetime.utcnow().isoformat()
             self.save_state_to_file()
             return trade
-        else:
-            try:
-                # реальный ордер закрытия
-                if side == "long":
-                    order = self.exchange.create_market_sell_order(SYMBOL, size)
-                else:
-                    order = self.exchange.create_market_buy_order(SYMBOL, size)
-                    
-                logging.info(f"Close order response: {order}")
-                
-                # Получаем цену закрытия
-                exit_price = float(order.get("average", order.get("price", self.get_current_price())))
-                entry_price = state["position"]["entry_price"]
-                
-                if state["position"]["side"] == "long":
-                    pnl = (exit_price - entry_price) * size
-                else:
-                    pnl = (entry_price - exit_price) * size
-                    
-                fee = abs(state["position"]["notional"]) * 0.0003
-                pnl_after_fee = pnl - fee
-                
-                # Возвращаем маржу + PnL
-                margin = state["position"].get("margin", abs(state["position"]["notional"]) / LEVERAGE)
-                previous_balance = state["balance"]
-                state["available"] += margin + pnl_after_fee  # Возвращаем маржу + PnL
-                state["balance"] = state["available"]
-                
-                trade = {
-                    "time": datetime.utcnow().isoformat(),
-                    "side": state["position"]["side"],
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "size_base": size,
-                    "pnl": pnl_after_fee,
-                    "notional": state["position"]["notional"],
-                    "duration": self.calculate_duration(state["position"]["entry_time"]),
-                    "close_reason": close_reason
-                }
-                
-                self.append_trade(trade)
-                
-                # Send signal to external service
-                if trade["side"] == "long":
-                    self.signal_sender.send_close_long()
-                else:
-                    self.signal_sender.send_close_short()
-                
-                # Telegram notification removed (already sent in paper trading branch)
-                
-                state["in_position"] = False
-                state["position"] = None
-                self.save_state_to_file()
-                return trade
-            except Exception as e:
-                logging.error(f"close_position error: {e}")
-                return None
-
-    def calculate_duration(self, entry_time_str):
-        """Calculate trade duration in human readable format"""
-        try:
-            entry_time = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
-            duration = datetime.utcnow() - entry_time
-            
-            minutes = int(duration.total_seconds() // 60)
-            seconds = int(duration.total_seconds() % 60)
-            
-            if minutes > 0:
-                return f"{minutes}м {seconds}с"
-            else:
-                return f"{seconds}с"
-        except:
-            return "N/A"
-
-    def append_trade(self, trade):
-        state["trades"].insert(0, trade)
-        # keep only last DASHBOARD_MAX
-        state["trades"] = state["trades"][:DASHBOARD_MAX]
 
     def get_current_price(self):
         try:
-            if USE_SIMULATOR and self.simulator:
-                # Используем симулятор
-                return self.simulator.get_current_price()
-            else:
-                # Используем реальную биржу
-                ticker = self.exchange.fetch_ticker(SYMBOL)
-                return float(ticker["last"])
-        except Exception as e:
-            logging.error(f"fetch ticker error: {e}")
-            # fallback
-            if RUN_IN_PAPER and state["position"] is None:
-                return 3000.0  # Default ETH price for paper trading
-            else:
-                return float(state["position"]["entry_price"]) if state["position"] else 3000.0
+            if USE_SIMULATOR: return self.simulator.get_current_price()
+            ticker = self.exchange.fetch_ticker(SYMBOL)
+            return float(ticker["last"])
+        except: return 3000.0
 
     def strategy_loop(self, should_continue=lambda: True):
-        logging.info(f"Starting strategy loop. RUN_IN_PAPER={RUN_IN_PAPER}")
+        logging.info(f"Strategy Loop Started. Filter: Entry(1m+30m), Exit(1m Change)")
         
         while should_continue():
             try:
-                # 1) Получаем свечи и направления
-                dfs = {}
                 dirs = {}
-                for tf in TIMEFRAMES.keys():
+                for tf in ["1m", "5m", "30m"]:
                     df = self.fetch_ohlcv_tf(tf)
-                    dfs[tf] = df
-                    if df is not None:
-                        dirs[tf] = self.get_direction_from_psar(df)
-                    else:
-                        dirs[tf] = None
+                    dirs[tf] = self.get_direction_from_psar(df) if df is not None else None
 
-                # пропускаем итерацию, если нет данных
-                if any(d is None for d in dirs.values()):
+                if dirs["1m"] is None or dirs["30m"] is None:
                     time.sleep(5)
                     continue
 
-                dir_1m = dirs["1m"]
-                dir_5m = dirs["5m"]
-                dir_30m = dirs["30m"]
-                
-                logging.info(f"[{self.now()}] SAR directions => 1m:{dir_1m} 5m:{dir_5m} 30m:{dir_30m}")
-                
-                # Store current SAR directions for sheets reporting
-                self._current_sar_directions = dirs
+                dir_1m, dir_30m = dirs["1m"], dirs["30m"]
+                logging.info(f"[{self.now()}] PSAR: 1m:{dir_1m} | 5m:{dirs['5m']} | 30m:{dir_30m}")
 
-                # Проверка на закрытие (если в позиции)
+                # --- ЛОГИКА ---
                 if state["in_position"]:
-                    # Закрытие по смене 1m SAR (мгновенно)
+                    # Выход: если 1m SAR сменил направление
                     if dir_1m != state["position"]["side"]:
-                        logging.info("Closing because 1m SAR changed")
-                        self.close_position(close_reason="sar_reversal")
-                        state["skip_next_signal"] = True  # устанавливаем флаг пропуска
-                        self.save_state_to_file()
-                        time.sleep(1)
-                        continue
-
-                # Если не в позиции — проверяем условие входа: SAR 1m и 30m совпадают
+                        logging.info(f"⚠️ EXIT SIGNAL: 1m changed to {dir_1m}")
+                        self.close_position(close_reason="sar_1m_reversal")
                 else:
-                    # Отслеживание смены 1m SAR для сброса флага пропуска
-                    if state["last_1m_dir"] and state["last_1m_dir"] != dir_1m:
-                        if state["skip_next_signal"]:
-                            logging.info(f"✅ Resetting skip flag after 1m SAR change: {state['last_1m_dir']} -> {dir_1m}")
-                            state["skip_next_signal"] = False  # сбрасываем флаг и РАЗРЕШАЕМ торговлю
-                            self.save_state_to_file()
-                    
-                    # Сохраняем текущее направление для отслеживания смен
-                    state["last_1m_dir"] = dir_1m
-                    
-                    # Вход когда 1m и 30m SAR совпадают (только если не нужно пропускать)
-                    if dir_1m in ["long", "short"] and dir_1m == dir_30m and not state["skip_next_signal"]:
-                        logging.info(f"✅ Entry signal: 1m = 30m SAR = {dir_1m.upper()}")
-                        
-                        # вход в позицию
+                    # Вход: если 1m и 30m совпадают
+                    if dir_1m == dir_30m:
+                        logging.info(f"🚀 ENTRY SIGNAL: 1m & 30m match ({dir_1m})")
                         side = "buy" if dir_1m == "long" else "sell"
-                        price = self.get_current_price()
-                        # compute order size
-                        size_base, notional = self.compute_order_size_usdt(state["balance"], price if price > 0 else 1.0)
-                        logging.info(f"Signal to OPEN {side} — size_base={size_base:.6f} notional=${notional:.2f} price={price}")
-                        
-                        # Place order (маржа уже вычитается в place_market_order)
-                        pos = self.place_market_order(side, amount_base=size_base)
-                        
+                        size_base, _ = self.compute_order_size_usdt(state["balance"], self.get_current_price())
+                        self.place_market_order(side, size_base)
                         self.save_state_to_file()
-                        time.sleep(1)
-                    elif state["skip_next_signal"] and dir_1m in ["long", "short"] and dir_1m == dir_15m:
-                        logging.info(f"🔄 Skip flag active: 15m:{dir_15m} = 1m:{dir_1m} (will trade after next 1m change)")
-                    else:
-                        # нет общего сигнала
-                        pass
 
-                time.sleep(5)  # маленькая пауза в основном цикле
+                time.sleep(10)
             except Exception as e:
-                logging.error(f"Main loop error: {e}")
+                logging.error(f"Loop error: {e}")
                 time.sleep(5)
