@@ -3,56 +3,58 @@ import logging
 import os
 
 class SignalSender:
-    """Отправка торговых сигналов (POST JSON) на внешний сервис через ngrok или локально"""
+    """Отправка торговых сигналов (GET) для фьючерсных прогнозов MEXC"""
     
     def __init__(self):
-        # Приоритет: переменная SIGNAL_WEBHOOK_URL в Railway, иначе localhost
-        self.url = os.getenv("SIGNAL_WEBHOOK_URL", "http://localhost:5000/trade/start")
-        # Базовый URL ассета на MEXC
-        self.target_url = "https://www.mexc.com/ru-RU/futures/SOL_USDT"
+        # Базовый адрес сервера (локальный или из переменной окружения)
+        self.base_url = os.getenv("SIGNAL_WEBHOOK_URL", "http://localhost:5000/trades")
+        # URL целевого актива на MEXC (Event Futures)
+        self.target_url = "https://www.mexc.com/ru-RU/futures/event-futures/ETH_USDT"
         
-    def send_signal(self, side: str, mode: str):
+    def send_signal(self, direction: str):
         """
-        side: 'Long' или 'Short'
-        mode: 'OPEN' или 'CLOSE'
+        direction: 'Up' (для лонга/роста) или 'Down' (для шорта/падения)
         """
-        payload = {
-            "settings": {
-                "targetUrl": self.target_url,
-                "openType": side,
-                "openPercent": 20,
-                "closeType": side,
-                "closePercent": 100,
-                "mode": mode
-            }
+        # Формируем параметры запроса
+        params = {
+            "targetUrl": self.target_url,
+            "quantity": 5,      # Ваша текущая ставка
+            "timeUnit": "H1",   # Таймфрейм 1 час
+            "orderDirection": direction
         }
         
         try:
-            logging.info(f"🚀 Sending POST to {self.url} | {side} {mode}")
+            logging.info(f"🚀 Sending GET signal to {self.base_url} | Direction: {direction}")
             
-            # Отправка JSON запроса
-            response = requests.post(self.url, json=payload, timeout=10)
+            # Отправка GET запроса с параметрами
+            response = requests.get(self.base_url, params=params, timeout=10)
+            
+            # Логируем итоговый URL для проверки
+            logging.debug(f"🔗 Full URL: {response.url}")
             
             if response.status_code in [200, 201]:
-                logging.info(f"✅ Webhook Success: {response.status_code}")
+                logging.info(f"✅ Signal Success: {response.status_code}")
                 return True
             else:
-                logging.error(f"❌ Webhook Server Error: {response.status_code} - {response.text}")
+                logging.error(f"❌ Server Error: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            logging.error(f"❌ Webhook Connection Failed: {e}")
+            logging.error(f"❌ Connection Failed: {e}")
             return False
     
-    # Методы управления сигналами для TradingBot
+    # Методы управления (только на открытие, согласно ТЗ)
     def send_open_long(self): 
-        return self.send_signal("Long", "OPEN")
-    
-    def send_close_long(self): 
-        return self.send_signal("Long", "CLOSE")
+        return self.send_signal("Up")
     
     def send_open_short(self): 
-        return self.send_signal("Short", "OPEN")
-    
-    def send_close_short(self): 
-        return self.send_signal("Short", "CLOSE")
+        return self.send_signal("Down")
+
+    # Методы закрытия (если потребуются, сейчас возвращают False или можно оставить пустыми)
+    def send_close_long(self):
+        logging.warning("⚠️ Close signal not implemented for GET mode")
+        return False
+
+    def send_close_short(self):
+        logging.warning("⚠️ Close signal not implemented for GET mode")
+        return False
