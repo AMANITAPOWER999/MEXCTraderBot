@@ -1,58 +1,55 @@
 import requests
 import logging
-import os
 
 class SignalSender:
-    """Отправка торговых сигналов GET на ngrok для ETH_USDT"""
+    """Отправка торговых сигналов GET на ngrok для ETH_USDT (Ставка 5)"""
     
     def __init__(self):
-        # Жестко прописываем ваш актуальный адрес ngrok
-        # Убедитесь, что эндпоинт именно /trades, как в вашем примере GET-запроса
+        # Базовый адрес вашего сервера-моста
         self.base_url = "https://traci-unflashy-questingly.ngrok-free.dev/trades"
         
-        # Целевой URL для ETH_USDT Прогнозов
+        # Целевой URL для ETH_USDT (Event Futures)
         self.target_url = "https://www.mexc.com/ru-RU/futures/event-futures/ETH_USDT"
         
     def send_signal(self, direction: str):
         """
-        direction: 'Up' (Лонг) или 'Down' (Шорт)
+        direction: 'Up' (Рост) или 'Down' (Падение)
         """
-        # Формируем параметры в точности по вашему шаблону
+        # Параметры запроса согласно вашему шаблону
         params = {
             "targetUrl": self.target_url,
-            "quantity": 1,          # Поменял ставку с 5 на 1 по вашему запросу
-            "timeUnit": "H1",       # Таймфрейм
+            "quantity": 5,          # Установлено значение 5 по вашему запросу
+            "timeUnit": "H1",       # Таймфрейм 1 час
             "orderDirection": direction
         }
         
         try:
-            logging.info(f"🛰 Попытка отправки сигнала: {direction}")
+            logging.info(f"🛰 Отправка сигнала: {direction} (Сумма: 5)")
             
-            # Выполняем GET запрос
-            # requests автоматически превратит params в ?targetUrl=...&quantity=1...
+            # Выполнение GET запроса
             response = requests.get(self.base_url, params=params, timeout=15)
             
-            # Выводим полный URL в лог для проверки (можно кликнуть в консоли)
-            logging.info(f"🔗 Сформированный URL: {response.url}")
+            # Логируем итоговую ссылку для визуальной проверки
+            logging.info(f"🔗 Ссылка: {response.url}")
             
             if response.status_code in [200, 201]:
-                logging.info(f"✅ Сигнал успешно доставлен! Код: {response.status_code}")
+                logging.info(f"✅ Успешно доставлено. Код: {response.status_code}")
                 return True
             else:
-                logging.error(f"❌ Ошибка сервера: {response.status_code} - {response.text}")
+                logging.error(f"❌ Ошибка сервера: {response.status_code}")
                 return False
                 
         except Exception as e:
-            logging.error(f"❌ Критическая ошибка при отправке: {e}")
+            logging.error(f"❌ Ошибка соединения: {e}")
             return False
     
-    # Методы-триггеры
+    # Методы активации
     def send_open_long(self): 
         return self.send_signal("Up")
     
     def send_open_short(self): 
         return self.send_signal("Down")
 
-    # Для GET-схемы на «Прогнозы» закрытие обычно не используется отдельно
+    # Пустые заглушки для совместимости с логикой бота
     def send_close_long(self): return True
     def send_close_short(self): return True
