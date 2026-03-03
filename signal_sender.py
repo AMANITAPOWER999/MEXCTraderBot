@@ -3,58 +3,56 @@ import logging
 import os
 
 class SignalSender:
-    """Отправка торговых сигналов (GET) для фьючерсных прогнозов MEXC"""
+    """Отправка торговых сигналов GET на ngrok для ETH_USDT"""
     
     def __init__(self):
-        # Базовый адрес сервера (локальный или из переменной окружения)
-        self.base_url = os.getenv("SIGNAL_WEBHOOK_URL", "http://localhost:5000/trades")
-        # URL целевого актива на MEXC (Event Futures)
+        # Жестко прописываем ваш актуальный адрес ngrok
+        # Убедитесь, что эндпоинт именно /trades, как в вашем примере GET-запроса
+        self.base_url = "https://traci-unflashy-questingly.ngrok-free.dev/trades"
+        
+        # Целевой URL для ETH_USDT Прогнозов
         self.target_url = "https://www.mexc.com/ru-RU/futures/event-futures/ETH_USDT"
         
     def send_signal(self, direction: str):
         """
-        direction: 'Up' (для лонга/роста) или 'Down' (для шорта/падения)
+        direction: 'Up' (Лонг) или 'Down' (Шорт)
         """
-        # Формируем параметры запроса
+        # Формируем параметры в точности по вашему шаблону
         params = {
             "targetUrl": self.target_url,
-            "quantity": 5,      # Ваша текущая ставка
-            "timeUnit": "H1",   # Таймфрейм 1 час
+            "quantity": 1,          # Поменял ставку с 5 на 1 по вашему запросу
+            "timeUnit": "H1",       # Таймфрейм
             "orderDirection": direction
         }
         
         try:
-            logging.info(f"🚀 Sending GET signal to {self.base_url} | Direction: {direction}")
+            logging.info(f"🛰 Попытка отправки сигнала: {direction}")
             
-            # Отправка GET запроса с параметрами
-            response = requests.get(self.base_url, params=params, timeout=10)
+            # Выполняем GET запрос
+            # requests автоматически превратит params в ?targetUrl=...&quantity=1...
+            response = requests.get(self.base_url, params=params, timeout=15)
             
-            # Логируем итоговый URL для проверки
-            logging.debug(f"🔗 Full URL: {response.url}")
+            # Выводим полный URL в лог для проверки (можно кликнуть в консоли)
+            logging.info(f"🔗 Сформированный URL: {response.url}")
             
             if response.status_code in [200, 201]:
-                logging.info(f"✅ Signal Success: {response.status_code}")
+                logging.info(f"✅ Сигнал успешно доставлен! Код: {response.status_code}")
                 return True
             else:
-                logging.error(f"❌ Server Error: {response.status_code} - {response.text}")
+                logging.error(f"❌ Ошибка сервера: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            logging.error(f"❌ Connection Failed: {e}")
+            logging.error(f"❌ Критическая ошибка при отправке: {e}")
             return False
     
-    # Методы управления (только на открытие, согласно ТЗ)
+    # Методы-триггеры
     def send_open_long(self): 
         return self.send_signal("Up")
     
     def send_open_short(self): 
         return self.send_signal("Down")
 
-    # Методы закрытия (если потребуются, сейчас возвращают False или можно оставить пустыми)
-    def send_close_long(self):
-        logging.warning("⚠️ Close signal not implemented for GET mode")
-        return False
-
-    def send_close_short(self):
-        logging.warning("⚠️ Close signal not implemented for GET mode")
-        return False
+    # Для GET-схемы на «Прогнозы» закрытие обычно не используется отдельно
+    def send_close_long(self): return True
+    def send_close_short(self): return True
