@@ -9,7 +9,7 @@ class SignalSender:
         self.base_url = "https://traci-unflashy-questingly.ngrok-free.dev/trades"
         
         # Целевой URL для ETH_USDT (Event Futures)
-        self.target_url = "https://www.mexc.com/ru-RU/futures/event-futures/ETH_USDT"
+        self.target_url = "https://www.mexc.com/ru-RU/futures/event-futures/BTC_USDT"
         
     def send_signal(self, direction: str):
         """
@@ -19,7 +19,7 @@ class SignalSender:
         params = {
             "targetUrl": self.target_url,
             "quantity": 5,          # Установлено значение 5 по вашему запросу
-            "timeUnit": "H1",       # Таймфрейм 1 час
+            "timeUnit": "M30",       # Таймфрейм 1 час
             "orderDirection": direction
         }
         
