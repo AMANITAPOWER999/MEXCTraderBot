@@ -19,7 +19,7 @@ class SignalSender:
         params = {
             "targetUrl": self.target_url,
             "quantity": 5,          # Установлено значение 5 по вашему запросу
-            "timeUnit": "M30",       # Таймфрейм 1 час
+            "timeUnit": "M10",       # Таймфрейм 1 час
             "orderDirection": direction
         }
         
