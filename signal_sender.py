@@ -14,7 +14,7 @@ class SignalSender:
         self.target_url = "https://www.mexc.com/ru-RU/futures/SOL_USDT"
 
         # Процент входа
-        self.open_percent = 100
+        self.open_percent = 20
         self.close_percent = 100
 
     def _send(self, open_type: str, mode: str):
