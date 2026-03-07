@@ -7,8 +7,7 @@ from datetime import datetime
 import ccxt
 import pandas as pd
 
-from ta.trend import PSARIndicator, EMAIndicator, ADXIndicator
-from ta.momentum import RSIIndicator
+from ta.trend import PSARIndicator
 
 from market_simulator import MarketSimulator
 from signal_sender import SignalSender
@@ -17,7 +16,6 @@ from signal_sender import SignalSender
 API_KEY = os.getenv("ASCENDEX_API_KEY", "")
 API_SECRET = os.getenv("ASCENDEX_SECRET", "")
 
-RUN_IN_PAPER = True
 USE_SIMULATOR = os.getenv("USE_SIMULATOR", "0") == "1"
 
 SYMBOL = "ETH/USDT:USDT"
@@ -27,14 +25,7 @@ POSITION_PERCENT = 0.10
 
 START_BANK = 100.0
 
-STATE_FILE = "goldantilopaeth500_state.json"
-
-
-TIMEFRAMES = {
-    "1m": 1,
-    "5m": 5,
-    "30m": 30
-}
+STATE_FILE = "psar_strategy_state.json"
 
 
 state = {
@@ -42,16 +33,14 @@ state = {
     "available": START_BANK,
     "in_position": False,
     "position": None,
-    "last_trade_time": None,
     "trades": []
 }
 
 
 class TradingBot:
 
-    def __init__(self, telegram_notifier=None):
+    def __init__(self):
 
-        self.notifier = telegram_notifier
         self.signal_sender = SignalSender()
 
         if USE_SIMULATOR:
@@ -70,43 +59,15 @@ class TradingBot:
                 "options": {"defaultType": "swap"}
             })
 
-        self.load_state_from_file()
-
-    def save_state_to_file(self):
+    def fetch_ohlcv(self, tf, limit=200):
 
         try:
 
-            with open(STATE_FILE, "w") as f:
-                json.dump(state, f, default=str, indent=2)
-
-        except Exception as e:
-            logging.error(f"Save error: {e}")
-
-    def load_state_from_file(self):
-
-        try:
-
-            if os.path.exists(STATE_FILE):
-
-                with open(STATE_FILE, "r") as f:
-                    data = json.load(f)
-                    state.update(data)
-
-        except Exception as e:
-            logging.error(f"Load error: {e}")
-
-    def fetch_ohlcv_tf(self, tf: str, limit=200):
-
-        try:
-
-            if USE_SIMULATOR and self.simulator:
+            if USE_SIMULATOR:
                 ohlcv = self.simulator.fetch_ohlcv(tf, limit=limit)
 
             else:
                 ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
-
-            if not ohlcv:
-                return None
 
             df = pd.DataFrame(
                 ohlcv,
@@ -117,77 +78,36 @@ class TradingBot:
 
         except Exception as e:
 
-            logging.error(f"Error fetching {tf}: {e}")
+            logging.error(f"OHLCV error: {e}")
             return None
 
-    def get_tf_direction(self, df):
+    def get_psar_direction(self, df):
 
         psar = PSARIndicator(
             high=df["high"],
             low=df["low"],
             close=df["close"],
-            step=0.05,
-            max_step=0.5
+            step=0.02,
+            max_step=0.2
         ).psar()
 
         price = df["close"].iloc[-1]
 
         return "long" if price > psar.iloc[-1] else "short"
 
-    def get_ultra_signal(self):
+    def get_signal(self):
 
-        df = self.fetch_ohlcv_tf("1m")
+        df1 = self.fetch_ohlcv("1m")
+        df15 = self.fetch_ohlcv("15m")
 
-        if df is None or len(df) < 100:
+        if df1 is None or df15 is None:
             return None
 
-        df5 = self.fetch_ohlcv_tf("5m")
-        df30 = self.fetch_ohlcv_tf("30m")
+        dir1 = self.get_psar_direction(df1)
+        dir15 = self.get_psar_direction(df15)
 
-        if df5 is None or df30 is None:
-            return None
-
-        dir1 = self.get_tf_direction(df)
-        dir5 = self.get_tf_direction(df5)
-        dir30 = self.get_tf_direction(df30)
-
-        ema20 = EMAIndicator(df["close"], window=20).ema_indicator()
-        ema50 = EMAIndicator(df["close"], window=50).ema_indicator()
-
-        rsi = RSIIndicator(df["close"], window=14).rsi()
-
-        adx = ADXIndicator(
-            high=df["high"],
-            low=df["low"],
-            close=df["close"],
-            window=14
-        ).adx()
-
-        vol_avg = df["volume"].rolling(20).mean()
-
-        price = df["close"].iloc[-1]
-
-        if (
-            dir1 == "long"
-            and dir5 == "long"
-            and dir30 == "long"
-            and ema20.iloc[-1] > ema50.iloc[-1]
-            and rsi.iloc[-1] > 55
-            and adx.iloc[-1] > 18
-            and df["volume"].iloc[-1] > vol_avg.iloc[-1]
-        ):
-            return "long"
-
-        if (
-            dir1 == "short"
-            and dir5 == "short"
-            and dir30 == "short"
-            and ema20.iloc[-1] < ema50.iloc[-1]
-            and rsi.iloc[-1] < 45
-            and adx.iloc[-1] > 18
-            and df["volume"].iloc[-1] > vol_avg.iloc[-1]
-        ):
-            return "short"
+        if dir1 == dir15:
+            return dir1
 
         return None
 
@@ -201,93 +121,65 @@ class TradingBot:
             return float(self.exchange.fetch_ticker(SYMBOL)["last"])
 
         except:
-            return 3000.0
+            return 3000
 
-    def place_market_order(self, side, amount_base):
+    def open_position(self, side):
 
         price = self.get_current_price()
 
         pos_dir = "long" if side == "buy" else "short"
-
-        margin = (amount_base * price) / LEVERAGE
-
-        state["available"] -= margin
 
         state["in_position"] = True
 
         state["position"] = {
             "side": pos_dir,
             "entry_price": price,
-            "size_base": amount_base,
-            "notional": amount_base * price,
-            "margin": margin,
             "entry_time": datetime.utcnow().isoformat()
         }
 
         if side == "buy":
             self.signal_sender.send_open_long()
-
         else:
             self.signal_sender.send_open_short()
 
-        self.save_state_to_file()
-
         logging.info(f"OPEN {pos_dir}")
 
-    def close_position(self, reason="signal_reverse"):
+    def close_position(self):
 
         pos = state["position"]
 
-        price = self.get_current_price()
-
-        pnl = (
-            (price - pos["entry_price"]) * pos["size_base"]
-            if pos["side"] == "long"
-            else (pos["entry_price"] - price) * pos["size_base"]
-        )
-
-        fee = abs(pos["notional"]) * 0.0003
-
-        pnl_after_fee = pnl - fee
-
-        state["available"] += pos["margin"] + pnl_after_fee
-
-        state["balance"] = state["available"]
-
-        trade = {
-            "time": datetime.utcnow().isoformat(),
-            "side": pos["side"],
-            "pnl": pnl_after_fee,
-            "close_reason": reason
-        }
-
-        state["trades"].insert(0, trade)
-
         if pos["side"] == "long":
             self.signal_sender.send_close_long()
-
         else:
             self.signal_sender.send_close_short()
+
+        logging.info("CLOSE POSITION")
 
         state["in_position"] = False
         state["position"] = None
 
-        self.save_state_to_file()
+    def strategy_loop(self):
 
-    def strategy_loop(self, should_continue=lambda: True):
+        logging.info("PSAR 1m + 15m STRATEGY STARTED")
 
-        logging.info("ULTRA STRATEGY STARTED")
-
-        while should_continue():
+        while True:
 
             try:
 
-                signal = self.get_ultra_signal()
+                df1 = self.fetch_ohlcv("1m")
+
+                if df1 is None:
+                    time.sleep(5)
+                    continue
+
+                dir1 = self.get_psar_direction(df1)
+
+                signal = self.get_signal()
 
                 if state["in_position"]:
 
-                    if signal and signal != state["position"]["side"]:
-                        self.close_position("trend_reverse")
+                    if dir1 != state["position"]["side"]:
+                        self.close_position()
 
                 else:
 
@@ -295,18 +187,11 @@ class TradingBot:
 
                         side = "buy" if signal == "long" else "sell"
 
-                        price = self.get_current_price()
-
-                        notional = state["balance"] * POSITION_PERCENT * LEVERAGE
-
-                        amount = notional / price
-
-                        self.place_market_order(side, amount)
+                        self.open_position(side)
 
                 time.sleep(5)
 
             except Exception as e:
 
                 logging.error(f"Loop error: {e}")
-
                 time.sleep(10)
