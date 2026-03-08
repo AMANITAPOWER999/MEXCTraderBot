@@ -23,7 +23,7 @@ SYMBOL = "ETH/USDT:USDT"  # ASCENDEX futures symbol format  # инструмен
 LEVERAGE = 500  # плечо x500
 ISOLATED = True  # изолированная маржа
 POSITION_PERCENT = 0.10  # 10% от доступного баланса
-TIMEFRAMES = {"1m": 1, "5m": 5, "30m": 30}  # Обновлено: 15м заменено на 30м
+TIMEFRAMES = {"1m": 1, "5m": 5, "15m": 15}  # Обновлено: 15м заменено на 30м
 MIN_TRADE_SECONDS = 120  # минимальная длительность сделки 2 минуты
 MIN_RANDOM_TRADE_SECONDS = 480  # минимальная случайная длительность сделки 8 минут
 MAX_RANDOM_TRADE_SECONDS = 780  # максимальная случайная длительность сделки 13 минут
@@ -469,9 +469,9 @@ class TradingBot:
 
                 dir_1m = dirs["1m"]
                 dir_5m = dirs["5m"]
-                dir_30m = dirs["30m"]
+                dir_15m = dirs["15m"]
                 
-                logging.info(f"[{self.now()}] SAR directions => 1m:{dir_1m} 5m:{dir_5m} 30m:{dir_30m}")
+                logging.info(f"[{self.now()}] SAR directions => 1m:{dir_1m} 5m:{dir_5m} 30m:{dir_15m}")
                 
                 # Store current SAR directions for sheets reporting
                 self._current_sar_directions = dirs
@@ -487,7 +487,7 @@ class TradingBot:
                         time.sleep(1)
                         continue
 
-                # Если не в позиции — проверяем условие входа: SAR 1m и 30m совпадают
+                # Если не в позиции — проверяем условие входа: SAR 1m и 15m совпадают
                 else:
                     # Отслеживание смены 1m SAR для сброса флага пропуска
                     if state["last_1m_dir"] and state["last_1m_dir"] != dir_1m:
@@ -500,8 +500,8 @@ class TradingBot:
                     state["last_1m_dir"] = dir_1m
                     
                     # Вход когда 1m и 30m SAR совпадают (только если не нужно пропускать)
-                    if dir_1m in ["long", "short"] and dir_1m == dir_30m and not state["skip_next_signal"]:
-                        logging.info(f"✅ Entry signal: 1m = 30m SAR = {dir_1m.upper()}")
+                    if dir_1m in ["long", "short"] and dir_1m == dir_15m and not state["skip_next_signal"]:
+                        logging.info(f"✅ Entry signal: 1m = 15m SAR = {dir_1m.upper()}")
                         
                         # вход в позицию
                         side = "buy" if dir_1m == "long" else "sell"
