@@ -1,7 +1,6 @@
 import os
 import time
 import json
-import random
 import logging
 from datetime import datetime
 
@@ -17,13 +16,10 @@ API_SECRET = os.getenv("ASCENDEX_SECRET", "")
 RUN_IN_PAPER = True 
 SYMBOL = "ETH/USDT:USDT"  
 LEVERAGE = 500  
-ISOLATED = True  
 POSITION_PERCENT = 0.10  
-TIMEFRAMES = {"1m": 1, "5m": 5, "30m": 30}  
+TIMEFRAMES = {"1m": 1, "30m": 30}  
 START_BANK = 100.0  
-DASHBOARD_MAX = 20
 
-# Глобальное состояние
 state = {
     "balance": START_BANK,
     "available": START_BANK,
@@ -50,7 +46,7 @@ class TradingBot:
             if os.path.exists("goldantilopaeth500_state.json"):
                 with open("goldantilopaeth500_state.json", "r") as f:
                     data = json.load(f)
-                    # Проверка на NaN при загрузке старых данных
+                    # Очистка от старых NaN при загрузке
                     if data.get("balance") and not np.isnan(data["balance"]):
                         state.update(data)
         except: pass
@@ -92,32 +88,33 @@ class TradingBot:
 
     def place_market_order(self, side, amount_base):
         try:
-            # Защита от NaN в объеме
             if amount_base is None or np.isnan(amount_base) or amount_base <= 0:
-                logging.error("❌ Ошибка: Некорректный объем сделки (NaN/0)")
                 return None
 
-            if not RUN_IN_PAPER and API_KEY:
-                method = self.exchange.create_market_buy_order if side == 'buy' else self.exchange.create_market_sell_order
-                order = method(SYMBOL, amount_base)
-                entry_price = float(order.get('average') or order.get('price') or self.get_current_price())
-            else:
-                entry_price = self.get_current_price()
-
+            # 1. Берем реальную цену входа
+            entry_price = self.get_current_price()
             notional = float(amount_base * entry_price)
+            
+            # 2. Считаем маржу (сколько реально заблокируется денег)
+            margin_used = notional / LEVERAGE
 
             state["telegram_trade_counter"] = state.get("telegram_trade_counter", 0) + 1
             state["in_position"] = True
+            
+            # 3. ВЫЧИТАЕМ ИЗ AVAILABLE СРАЗУ (для визуала)
+            state["available"] = round(float(state["balance"] - margin_used), 2)
+            
             state["position"] = {
                 "side": "long" if side == "buy" else "short",
                 "entry_price": entry_price,
                 "size_base": float(amount_base),
                 "entry_time": datetime.utcnow().isoformat(),
                 "trade_number": state["telegram_trade_counter"],
-                "notional": notional # Теперь число гарантировано
+                "notional": round(notional, 2),
+                "margin": round(margin_used, 2)
             }
             self.save_state_to_file()
-            logging.info(f"🟢 Вход: {side} по {entry_price}. Notional: ${notional:.2f}")
+            logging.info(f"🟢 ВХОД: {side}. Available: ${state['available']}")
             return state["position"]
         except Exception as e:
             logging.error(f"Order error: {e}")
@@ -131,9 +128,14 @@ class TradingBot:
             entry_price = float(state["position"]["entry_price"])
             size = float(state["position"]["size_base"])
             
-            pnl = (exit_price - entry_price) * size if state["position"]["side"] == "long" else (entry_price - exit_price) * size
+            # Расчет прибыли
+            if state["position"]["side"] == "long":
+                pnl = (exit_price - entry_price) * size
+            else:
+                pnl = (entry_price - exit_price) * size
             
-            state["balance"] = float(state["balance"] + pnl)
+            # 4. ОБНОВЛЯЕМ БАЛАНС И ВОЗВРАЩАЕМ В AVAILABLE
+            state["balance"] = round(float(state["balance"] + pnl), 2)
             state["available"] = state["balance"]
             
             trade = {
@@ -147,14 +149,14 @@ class TradingBot:
             state["in_position"] = False
             state["position"] = None
             self.save_state_to_file()
-            logging.info(f"🔴 Закрыто ({close_reason}). PnL: {round(pnl, 2)}")
+            logging.info(f"🔴 ЗАКРЫТО: {close_reason}. Баланс: ${state['balance']}")
             return trade
         except Exception as e:
             logging.error(f"Close error: {e}")
             return None
 
     def strategy_loop(self, should_continue=lambda: True):
-        logging.info("🤖 Бот запущен. Стратегия: 1m+30m PSAR")
+        logging.info("🤖 Робот активен: 1m SAR exit enabled")
         while should_continue():
             try:
                 dirs = self.get_current_directions()
@@ -163,7 +165,7 @@ class TradingBot:
                 if not state["in_position"]:
                     if dir1 == dir30 and dir1 is not None:
                         price = self.get_current_price()
-                        # Защита расчета размера от NaN
+                        # Расчет сайза: 10% от банка с плечом 500
                         raw_size = (state["balance"] * POSITION_PERCENT * LEVERAGE) / price
                         self.place_market_order('buy' if dir1 == 'long' else 'sell', float(raw_size))
                 else:
@@ -171,7 +173,7 @@ class TradingBot:
                     seconds_passed = (datetime.utcnow() - entry_t).total_seconds()
                     current_side = state["position"]["side"]
 
-                    # ВЫХОД: Разворот 1м тренда ИЛИ 10 минут
+                    # УСЛОВИЕ ВЫХОДА: Смена 1м SAR или таймаут 10 минут
                     if (dir1 is not None and dir1 != current_side) or seconds_passed > 600:
                         reason = "trend_flip_1m" if seconds_passed <= 600 else "timeout"
                         self.close_position(close_reason=reason)
