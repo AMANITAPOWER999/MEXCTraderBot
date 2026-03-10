@@ -14,8 +14,6 @@ from signal_sender import SignalSender
 API_KEY = os.getenv("ASCENDEX_API_KEY", "")
 API_SECRET = os.getenv("ASCENDEX_SECRET", "")
 RUN_IN_PAPER = True 
-USE_SIMULATOR = os.getenv("USE_SIMULATOR", "0") == "1"
-
 SYMBOL = "ETH/USDT:USDT"  
 LEVERAGE = 500  
 ISOLATED = True  
@@ -30,9 +28,7 @@ state = {
     "in_position": False,
     "position": None,
     "trades": [],
-    "telegram_trade_counter": 0,
-    "skip_next_signal": False,
-    "last_1m_dir": None
+    "telegram_trade_counter": 0
 }
 
 class TradingBot:
@@ -52,40 +48,36 @@ class TradingBot:
             if os.path.exists("goldantilopaeth500_state.json"):
                 with open("goldantilopaeth500_state.json", "r") as f:
                     state.update(json.load(f))
-        except Exception as e:
-            logging.error(f"Load error: {e}")
+        except: pass
 
     def save_state_to_file(self):
         try:
             with open("goldantilopaeth500_state.json", "w") as f:
                 json.dump(state, f, indent=2, default=str)
-        except Exception as e:
-            logging.error(f"Save error: {e}")
+        except: pass
 
     def get_current_price(self):
         ticker = self.exchange.fetch_ticker(SYMBOL)
         return float(ticker['last'])
 
-    # --- МЕТОД ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ В ЛОГАХ ---
-    def get_current_directions(self):
-        """Этот метод нужен для веб-интерфейса Railway"""
-        directions = {}
-        for tf in TIMEFRAMES.keys():
-            df = self.fetch_ohlcv_tf(tf)
-            directions[tf] = self.get_direction_from_psar(df) if df is not None else None
-        return directions
-
     def fetch_ohlcv_tf(self, tf, limit=100):
         ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
-        df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-        return df
+        return pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
 
     def get_direction_from_psar(self, df):
         psar = PSARIndicator(df["high"], df["low"], df["close"], step=0.05, max_step=0.5).psar()
         return "long" if df["close"].iloc[-1] > psar.iloc[-1] else "short"
 
+    def get_current_directions(self):
+        directions = {}
+        for tf in TIMEFRAMES.keys():
+            try:
+                df = self.fetch_ohlcv_tf(tf)
+                directions[tf] = self.get_direction_from_psar(df)
+            except: directions[tf] = None
+        return directions
+
     def place_market_order(self, side, amount_base):
-        logging.info(f"Opening {side}")
         try:
             if not RUN_IN_PAPER and API_KEY:
                 method = self.exchange.create_market_buy_order if side == 'buy' else self.exchange.create_market_sell_order
@@ -94,14 +86,15 @@ class TradingBot:
             else:
                 entry_price = self.get_current_price()
 
-            state["telegram_trade_counter"] += 1
+            state["telegram_trade_counter"] = state.get("telegram_trade_counter", 0) + 1
             state["in_position"] = True
             state["position"] = {
                 "side": "long" if side == "buy" else "short",
-                "entry_price": entry_price, # БЕРЕМ РЕАЛЬНУЮ ЦЕНУ
+                "entry_price": entry_price,
                 "size_base": amount_base,
                 "entry_time": datetime.utcnow().isoformat(),
-                "trade_number": state["telegram_trade_counter"]
+                "trade_number": state["telegram_trade_counter"],
+                "notional": amount_base * entry_price
             }
             self.save_state_to_file()
             return state["position"]
@@ -109,11 +102,44 @@ class TradingBot:
             logging.error(f"Order error: {e}")
             return None
 
-    # --- МЕТОД ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ В ЛОГАХ ---
-    def strategy_loop(self):
-        """Railway вызывает именно этот метод"""
-        logging.info("🤖 Main Loop Started")
-        while True:
+    def close_position(self, close_reason="manual"):
+        if not state["in_position"] or not state["position"]:
+            return None
+        
+        try:
+            exit_price = self.get_current_price()
+            entry_price = state["position"]["entry_price"]
+            size = state["position"]["size_base"]
+            
+            # Расчет PnL (упрощенно для Paper)
+            if state["position"]["side"] == "long":
+                pnl = (exit_price - entry_price) * size
+            else:
+                pnl = (entry_price - exit_price) * size
+            
+            state["balance"] += pnl
+            state["available"] = state["balance"]
+            
+            trade = {
+                "time": datetime.utcnow().isoformat(),
+                "side": state["position"]["side"],
+                "pnl": pnl,
+                "exit_price": exit_price
+            }
+            state["trades"].insert(0, trade)
+            state["in_position"] = False
+            state["position"] = None
+            self.save_state_to_file()
+            logging.info(f"Position closed. PnL: {pnl}")
+            return trade
+        except Exception as e:
+            logging.error(f"Close error: {e}")
+            return None
+
+    def strategy_loop(self, should_continue=lambda: True):
+        """Исправлено: теперь принимает аргумент should_continue"""
+        logging.info("🤖 Strategy loop started")
+        while should_continue():
             try:
                 dirs = self.get_current_directions()
                 dir1, dir30 = dirs.get("1m"), dirs.get("30m")
@@ -124,10 +150,12 @@ class TradingBot:
                         size = (state["balance"] * POSITION_PERCENT * LEVERAGE) / price
                         self.place_market_order('buy' if dir1 == 'long' else 'sell', size)
                 else:
-                    # Логика выхода (10 мин или смена SAR)
-                    pass 
+                    # Проверка выхода через 10 минут
+                    entry_t = datetime.fromisoformat(state["position"]["entry_time"])
+                    if (datetime.utcnow() - entry_t).total_seconds() > 600:
+                        self.close_position(close_reason="timeout")
                 
                 time.sleep(10)
             except Exception as e:
                 logging.error(f"Loop error: {e}")
-                time.sleep(5)
+                time.sleep(10)
