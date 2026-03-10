@@ -56,25 +56,30 @@ class TradingBot:
                 json.dump(state, f, indent=2, default=str)
         except: pass
 
-    def get_current_price(self):
-        ticker = self.exchange.fetch_ticker(SYMBOL)
-        return float(ticker['last'])
+    def get_current_price(self, price_type='last'):
+        """'last' для исполнения, 'mark' для плавного отображения P&L"""
+        try:
+            ticker = self.exchange.fetch_ticker(SYMBOL)
+            return float(ticker.get(price_type, ticker['last']))
+        except:
+            return 3000.0
 
     def fetch_ohlcv_tf(self, tf, limit=100):
-        ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
-        return pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        try:
+            ohlcv = self.exchange.fetch_ohlcv(SYMBOL, timeframe=tf, limit=limit)
+            return pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        except: return None
 
     def get_direction_from_psar(self, df):
+        if df is None or len(df) < 10: return None
         psar = PSARIndicator(df["high"], df["low"], df["close"], step=0.05, max_step=0.5).psar()
         return "long" if df["close"].iloc[-1] > psar.iloc[-1] else "short"
 
     def get_current_directions(self):
         directions = {}
         for tf in TIMEFRAMES.keys():
-            try:
-                df = self.fetch_ohlcv_tf(tf)
-                directions[tf] = self.get_direction_from_psar(df)
-            except: directions[tf] = None
+            df = self.fetch_ohlcv_tf(tf)
+            directions[tf] = self.get_direction_from_psar(df)
         return directions
 
     def place_market_order(self, side, amount_base):
@@ -90,13 +95,13 @@ class TradingBot:
             state["in_position"] = True
             state["position"] = {
                 "side": "long" if side == "buy" else "short",
-                "entry_price": entry_price,
+                "entry_price": entry_price, # ТОЧНАЯ ЦЕНА С БИРЖИ
                 "size_base": amount_base,
                 "entry_time": datetime.utcnow().isoformat(),
-                "trade_number": state["telegram_trade_counter"],
-                "notional": amount_base * entry_price
+                "trade_number": state["telegram_trade_counter"]
             }
             self.save_state_to_file()
+            logging.info(f"🟢 Позиция открыта: {side} по {entry_price}")
             return state["position"]
         except Exception as e:
             logging.error(f"Order error: {e}")
@@ -105,13 +110,11 @@ class TradingBot:
     def close_position(self, close_reason="manual"):
         if not state["in_position"] or not state["position"]:
             return None
-        
         try:
             exit_price = self.get_current_price()
             entry_price = state["position"]["entry_price"]
             size = state["position"]["size_base"]
             
-            # Расчет PnL (упрощенно для Paper)
             if state["position"]["side"] == "long":
                 pnl = (exit_price - entry_price) * size
             else:
@@ -123,37 +126,43 @@ class TradingBot:
             trade = {
                 "time": datetime.utcnow().isoformat(),
                 "side": state["position"]["side"],
-                "pnl": pnl,
-                "exit_price": exit_price
+                "pnl": round(pnl, 2),
+                "exit_price": exit_price,
+                "reason": close_reason
             }
             state["trades"].insert(0, trade)
             state["in_position"] = False
             state["position"] = None
             self.save_state_to_file()
-            logging.info(f"Position closed. PnL: {pnl}")
+            logging.info(f"🔴 Позиция закрыта ({close_reason}). PnL: {round(pnl, 2)}")
             return trade
         except Exception as e:
             logging.error(f"Close error: {e}")
             return None
 
     def strategy_loop(self, should_continue=lambda: True):
-        """Исправлено: теперь принимает аргумент should_continue"""
-        logging.info("🤖 Strategy loop started")
+        logging.info("🤖 Бот запущен (Выход по 1м SAR или 10 мин)")
         while should_continue():
             try:
                 dirs = self.get_current_directions()
                 dir1, dir30 = dirs.get("1m"), dirs.get("30m")
 
                 if not state["in_position"]:
+                    # ВХОД: когда 1м совпадает с 30м
                     if dir1 == dir30 and dir1 is not None:
                         price = self.get_current_price()
                         size = (state["balance"] * POSITION_PERCENT * LEVERAGE) / price
                         self.place_market_order('buy' if dir1 == 'long' else 'sell', size)
                 else:
-                    # Проверка выхода через 10 минут
+                    # ВЫХОД:
                     entry_t = datetime.fromisoformat(state["position"]["entry_time"])
-                    if (datetime.utcnow() - entry_t).total_seconds() > 600:
-                        self.close_position(close_reason="timeout")
+                    seconds_passed = (datetime.utcnow() - entry_t).total_seconds()
+                    current_side = state["position"]["side"]
+
+                    # Условие: разворот на 1м ИЛИ прошло 10 минут
+                    if (dir1 is not None and dir1 != current_side) or seconds_passed > 600:
+                        reason = "trend_flip_1m" if seconds_passed <= 600 else "timeout"
+                        self.close_position(close_reason=reason)
                 
                 time.sleep(10)
             except Exception as e:
