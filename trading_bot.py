@@ -47,14 +47,13 @@ class TradingBot:
             if os.path.exists("goldantilopaeth500_state.json"):
                 with open("goldantilopaeth500_state.json", "r") as f:
                     data = json.load(f)
-                    # Загружаем историю сделок, если она есть
                     if "trades" in data:
                         state["trades"] = data["trades"]
                     if data.get("balance") and not np.isnan(data["balance"]):
                         state["balance"] = float(data["balance"])
                         state["available"] = float(data.get("available", data["balance"]))
                         state["telegram_trade_counter"] = data.get("telegram_trade_counter", 0)
-                    logging.info(f"✅ Состояние загружено. Сделок в истории: {len(state['trades'])}")
+                    logging.info(f"✅ Состояние загружено. Сделок: {len(state['trades'])}")
         except Exception as e:
             logging.error(f"Ошибка загрузки: {e}")
 
@@ -123,4 +122,26 @@ class TradingBot:
             size = float(state["position"]["size_base"])
             side = state["position"]["side"]
             
-            pnl = (exit_price - entry_price) * size
+            pnl = (exit_price - entry_price) * size if side == "long" else (entry_price - exit_price) * size
+            
+            state["balance"] = round(float(state["balance"] + pnl), 2)
+            state["available"] = state["balance"]
+            
+            new_trade = {
+                "trade_number": state["telegram_trade_counter"],
+                "time": datetime.utcnow().isoformat(),
+                "side": side,
+                "pnl": round(pnl, 2),
+                "entry": entry_price,
+                "exit": exit_price,
+                "reason": close_reason
+            }
+            
+            state["trades"].insert(0, new_trade)
+            state["trades"] = state["trades"][:50]
+            
+            state["in_position"] = False
+            state["position"] = None
+            
+            self.save_state_to_file()
+            logging.info(f"🔴 ЗАКРЫТО: PnL {new_trade['pnl']}. Всего сделок: {len
