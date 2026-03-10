@@ -20,7 +20,7 @@ POSITION_PERCENT = 0.10
 TIMEFRAMES = {"1m": 1, "30m": 30}  
 START_BANK = 100.0  
 
-# Глобальное состояние (единый источник правды для app.py)
+# Глобальное состояние
 state = {
     "balance": START_BANK,
     "available": START_BANK,
@@ -53,22 +53,21 @@ class TradingBot:
                         state["balance"] = float(data["balance"])
                         state["available"] = float(data.get("available", data["balance"]))
                         state["telegram_trade_counter"] = data.get("telegram_trade_counter", 0)
-                    logging.info(f"✅ Данные загружены. Сделок в истории: {len(state['trades'])}")
+                    logging.info("✅ Состояние загружено успешно")
         except Exception as e:
-            logging.error(f"Ошибка загрузки файла: {e}")
+            logging.error(f"Ошибка загрузки: {e}")
 
     def save_state_to_file(self):
         try:
             with open("goldantilopaeth500_state.json", "w") as f:
                 json.dump(state, f, indent=2, default=str)
         except Exception as e:
-            logging.error(f"Ошибка сохранения файла: {e}")
+            logging.error(f"Ошибка сохранения: {e}")
 
     def get_current_price(self, price_type='last'):
         try:
             ticker = self.exchange.fetch_ticker(SYMBOL)
-            price = ticker.get(price_type, ticker.get('last'))
-            return float(price) if price else 3000.0
+            return float(ticker.get(price_type, ticker['last']))
         except: return 3000.0
 
     def fetch_ohlcv_tf(self, tf, limit=100):
@@ -87,7 +86,13 @@ class TradingBot:
 
     def place_market_order(self, side, amount_base):
         try:
-            if amount_base is None or np.isnan(amount_base) or amount_base <= 0:
-                return None
-
-            entry
+            if amount_base is None or np.isnan(amount_base) or amount_base <= 0: return None
+            entry_price = self.get_current_price()
+            notional = float(amount_base * entry_price)
+            state["telegram_trade_counter"] += 1
+            state["in_position"] = True
+            state["position"] = {
+                "side": "long" if side == "buy" else "short",
+                "entry_price": entry_price,
+                "size_base": float(amount_base),
+                "entry_time": datetime.utcnow
